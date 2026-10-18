@@ -26,6 +26,24 @@ WEIGHT_URLS = {
 }
 
 
+def get_device() -> torch.device:
+    """AUTOLABEL_DEVICE (cpu|cuda|mps) if set, else CUDA > Apple MPS > CPU."""
+    want = os.environ.get("AUTOLABEL_DEVICE", "").strip().lower()
+    if want:
+        return torch.device(want)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def set_threads(n: int):
+    """n > 0 limits torch CPU threads; 0 keeps torch's default (all cores)."""
+    if n and n > 0:
+        torch.set_num_threads(n)
+
+
 def weights_dir() -> str:
     return os.environ.get("AUTOLABEL_WEIGHTS", os.path.expanduser("~/.cache/autolabel/weights"))
 

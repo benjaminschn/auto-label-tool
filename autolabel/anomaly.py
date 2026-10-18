@@ -20,26 +20,28 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .model import create_encoder, normalize
+from .model import create_encoder, get_device, normalize, set_threads
 
 
 class NormalityModel:
     def __init__(self, backbone: str = "wide_resnet50_2", out_indices=(2, 3), proj_dim: int = 256,
                  patches_per_image: int = 64, k: int = 3, blur_sigma: float = 4.0, seed: int = 0,
-                 threads: int = 4):
-        torch.set_num_threads(threads)
-        self.encoder = create_encoder(backbone, True, out_indices=out_indices).eval()
+                 threads: int = 0):
+        set_threads(threads)
+        self.dev = get_device()
+        self.encoder = create_encoder(backbone, True, out_indices=out_indices).eval().to(self.dev)
         self.proj_dim, self.ppi, self.k, self.sigma = proj_dim, patches_per_image, k, blur_sigma
         self.rng = np.random.RandomState(seed)
         dims = sum(self.encoder.feature_info.channels())
         g = torch.Generator().manual_seed(seed)
-        self.proj = torch.randn(dims, proj_dim, generator=g) / np.sqrt(proj_dim)
+        self.proj = (torch.randn(dims, proj_dim, generator=g) / np.sqrt(proj_dim)).to(self.dev)
         self.bank: Optional[torch.Tensor] = None
         self.bank_ids: Optional[torch.Tensor] = None
+        self.offsets = {}   # image id -> (start, end) of its patches in the bank (contiguous)
 
     @torch.no_grad()
     def features(self, img: np.ndarray) -> torch.Tensor:
-        x = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None]
+        x = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None].to(self.dev)
         h, w = x.shape[-2:]
         ph, pw = (-h) % 16, (-w) % 16
         x = F.pad(x, (0, pw, 0, ph), mode="replicate")
@@ -52,12 +54,14 @@ class NormalityModel:
         return (f[:hs, :ws] @ self.proj).contiguous()         # crop padding, project
 
     def fit(self, images: Sequence[np.ndarray], log=None):
-        bank, ids = [], []
+        bank, ids, pos = [], [], 0
         for i, img in enumerate(images):
             f = self.features(img).reshape(-1, self.proj_dim)
             sel = self.rng.choice(len(f), min(self.ppi, len(f)), replace=False)
-            bank.append(f[sel])
+            bank.append(f[torch.from_numpy(sel).to(f.device)])
             ids.append(torch.full((len(sel),), i, dtype=torch.long))
+            self.offsets[i] = (pos, pos + len(sel))
+            pos += len(sel)
             if log and i % 200 == 0:
                 log(f"  normality bank {i}/{len(images)}")
         self.bank = torch.cat(bank)
@@ -68,16 +72,22 @@ class NormalityModel:
     @torch.no_grad()
     def knn_distance(self, q: torch.Tensor, image_id: Optional[int] = None) -> torch.Tensor:
         """Distance of each query patch to its k-th nearest bank patch from another image."""
-        kth = torch.empty(len(q))
-        extra = self.ppi if image_id is not None else 0
+        if not hasattr(self, "offsets"):
+            self.offsets = {}
+        if image_id is not None and image_id not in self.offsets:
+            # bank built elsewhere (e.g. tests): derive contiguous ranges from the id vector
+            ids = self.bank_ids.cpu().numpy()
+            for j in np.unique(ids):
+                w = np.flatnonzero(ids == j)
+                self.offsets[int(j)] = (int(w[0]), int(w[-1]) + 1)
+        kth = torch.empty(len(q), device=q.device)
         for c in range(0, len(q), 2048):   # chunked to bound memory
             qc = q[c:c + 2048]
             dist = (qc ** 2).sum(1, keepdim=True) - 2 * qc @ self.bank.T + self.bank_sq[None]
-            vals, idx = torch.topk(dist, self.k + extra, dim=1, largest=False)
-            if extra:
-                # the own image contributes at most `ppi` bank patches: drop them, keep the k-th of the rest
-                vals = torch.where(self.bank_ids[idx] == image_id, torch.full_like(vals, float("inf")), vals)
-                vals = torch.sort(vals, dim=1).values
+            if image_id is not None:
+                s, e = self.offsets[image_id]
+                dist[:, s:e] = float("inf")     # never explain a patch by its own image
+            vals = torch.topk(dist, self.k, dim=1, largest=False).values
             kth[c:c + 2048] = vals[:, self.k - 1].clamp(min=0).sqrt()
         return kth
 
@@ -88,7 +98,7 @@ class NormalityModel:
         amap = self.knn_distance(f.reshape(-1, d), image_id).reshape(1, 1, hs, ws)
         H, W = img.shape[:2]
         amap = F.interpolate(amap, size=(hs * 8, ws * 8), mode="bilinear", align_corners=False)[0, 0, :H, :W]
-        amap = amap.numpy()
+        amap = amap.float().cpu().numpy()
         if self.sigma > 0:
             amap = cv2.GaussianBlur(amap, (0, 0), self.sigma)
         return amap.astype(np.float32)

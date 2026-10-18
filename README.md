@@ -3,8 +3,9 @@
 Automatisches, pixelgenaues Labeling von Kratzern und feinen Oberflächendefekten aus **sehr wenigen
 Masken** – mit **messbarer, statistisch abgesicherter Labelqualität**.
 
-> Status: Forschungs-Prototyp. Ergebnisse auf öffentlichen Industriedatensätzen siehe
-> [`docs/RESULTS.md`](docs/RESULTS.md), Methode und Begründungen in [`docs/METHOD.md`](docs/METHOD.md).
+> Status: Forschungs-Prototyp, Benchmark-Läufe stehen noch aus. Stand, offene Punkte und
+> Experimentplan: [`docs/HANDOFF.md`](docs/HANDOFF.md). Methode und Begründungen:
+> [`docs/METHOD.md`](docs/METHOD.md).
 
 ## Die Idee in fünf Sätzen
 
@@ -29,6 +30,7 @@ Masken** – mit **messbarer, statistisch abgesicherter Labelqualität**.
 
 ```bash
 pip install -e .            # torch, timm, opencv, scikit-learn, scipy
+# läuft auf CUDA, Apple-GPU (MPS) oder CPU – automatisch, oder AUTOLABEL_DEVICE=cpu|mps|cuda
 # images/: alle Bilder, masks/: die vorhandenen Masken (gleicher Dateiname, Defekt > 0)
 autolabel run --images images/ --masks masks/ --out run1/
 ```

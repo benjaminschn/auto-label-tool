@@ -19,23 +19,24 @@ import torch
 import torch.nn.functional as F
 from scipy import ndimage as ndi
 
-from .model import create_encoder, normalize
+from .model import create_encoder, get_device, normalize, set_threads
 
 
 class ComponentFeaturizer:
-    def __init__(self, backbone: str = "resnet18d", out_indices=(2, 3), threads: int = 4):
-        torch.set_num_threads(threads)
-        self.enc = create_encoder(backbone, True, out_indices=out_indices).eval()
+    def __init__(self, backbone: str = "resnet18d", out_indices=(2, 3), threads: int = 0):
+        set_threads(threads)
+        self.dev = get_device()
+        self.enc = create_encoder(backbone, True, out_indices=out_indices).eval().to(self.dev)
 
     @torch.no_grad()
     def feature_maps(self, img: np.ndarray) -> torch.Tensor:
-        x = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None]
+        x = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None].to(self.dev)
         h, w = x.shape[-2:]
         x = F.pad(x, (0, (-w) % 32, 0, (-h) % 32), mode="replicate")
         fs = self.enc(normalize(x))
-        size = (h, w)
-        return torch.cat([F.interpolate(f, size=fs[0].shape[-2:], mode="bilinear", align_corners=False)
-                          for f in fs], 1)[0], fs[0].shape[-2:]
+        fmap = torch.cat([F.interpolate(f, size=fs[0].shape[-2:], mode="bilinear", align_corners=False)
+                          for f in fs], 1)[0].float().cpu()
+        return fmap, fs[0].shape[-2:]
 
     def describe(self, img: np.ndarray, mask: np.ndarray, merge_radius: int = 2
                  ) -> Tuple[np.ndarray, List[np.ndarray]]:

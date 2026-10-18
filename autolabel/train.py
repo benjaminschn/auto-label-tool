@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 
 from . import augment as A
-from .model import UNet, normalize
+from .model import UNet, get_device, normalize, set_threads
 
 
 @dataclass
@@ -38,7 +38,7 @@ class TrainConfig:
     boundary_ignore: int = 0         # ignore a ring of this width outside GT defects (subjective borders)
     dropout: float = 0.1
     seed: int = 0
-    threads: int = 4
+    threads: int = 0                 # CPU threads for torch (0 = torch default = all cores)
 
     def to_dict(self):
         return asdict(self)
@@ -152,10 +152,11 @@ def build_model(cfg: TrainConfig, pretrained: bool = True) -> UNet:
 
 def train_member(data: TrainData, cfg: TrainConfig, log: Optional[Callable[[str], None]] = None) -> UNet:
     torch.manual_seed(cfg.seed)
-    torch.set_num_threads(cfg.threads)
+    set_threads(cfg.threads)
+    dev = get_device()
     rng = np.random.RandomState(cfg.seed)
     gen = SampleGenerator(data, cfg, rng)
-    model = build_model(cfg).to(memory_format=torch.channels_last)
+    model = build_model(cfg).to(dev, memory_format=torch.channels_last)
     enc_params = list(model.encoder.parameters())
     enc_ids = {id(p) for p in enc_params}
     dec_params = [p for p in model.parameters() if id(p) not in enc_ids]
@@ -171,7 +172,7 @@ def train_member(data: TrainData, cfg: TrainConfig, log: Optional[Callable[[str]
             0.5 * (1 + math.cos(math.pi * (it - cfg.warmup) / max(1, cfg.iters - cfg.warmup)))
         for g, b in zip(opt.param_groups, base):
             g["lr"] = b * f
-        x, t, w = gen.batch(cfg.batch)
+        x, t, w = (v.to(dev) for v in gen.batch(cfg.batch))
         x = normalize(x).contiguous(memory_format=torch.channels_last)
         loss = seg_loss(model(x), t, w, cfg.dice_weight)
         opt.zero_grad(set_to_none=True)
@@ -179,6 +180,6 @@ def train_member(data: TrainData, cfg: TrainConfig, log: Optional[Callable[[str]
         opt.step()
         run = 0.95 * run + 0.05 * loss.item() if it else loss.item()
         if log and (it % 100 == 0 or it == cfg.iters - 1):
-            log(f"  it {it:4d}  loss {run:.4f}  {time.time() - t0:.0f}s")
+            log(f"  it {it:4d}  loss {run:.4f}  {time.time() - t0:.0f}s  [{dev.type}]")
     model.eval()
     return model
