@@ -3,11 +3,19 @@
 Stand: 18.10.2026. Dieses Dokument reicht, um ohne den bisherigen Chat weiterzumachen.
 Begründungen der Methode stehen in [`METHOD.md`](METHOD.md), Nutzung im [`README`](../README.md).
 
+> **Nachtrag Forschung (18.10.2026, abends):** Fünf Literaturberichte, ein Theoriebeitrag und eine
+> Synthese liegen in [`research/`](research/). **Zuerst [`research/00_SYNTHESE.md`](research/00_SYNTHESE.md)
+> lesen.** Dort stehen das Nachfolger-Konzept „CertAL“, eine Liste der Schwächen des aktuellen Codes
+> (§3, u. a. gilt die Recall-Garantie für U nicht) und eine überarbeitete Roadmap (§6). Diese ersetzt
+> die Prioritäten in Abschnitt 4/7 dieses Dokuments, soweit sie sich widersprechen. Die
+> Baseline-Läufe aus Abschnitt 4 bleiben als Referenz sinnvoll (Roadmap-Phase 1).
+
 ---
 
 ## 1. Ziel (Kurzfassung der Aufgabe)
 
-Pixelgenaue Auto-Labels für Kratzer/feine Defekte auf Industrieoberflächen aus **sehr wenigen Masken**
+Pixelgenaue Auto-Labels für anspruchsvolle industrielle Defektsegmentierung (verschiedene Aufgaben,
+Defekte klein bis groß, eine oder mehrere Klassen) aus **sehr wenigen Masken**
 und vielen ungelabelten Bildern. Hohe Labelqualität, übersehene Defekte sind besonders kritisch, und
 die Qualität muss **messbar** sein, obwohl kaum Ground Truth existiert. Die Lösung soll auf echten
 öffentlichen Datensätzen validiert werden.

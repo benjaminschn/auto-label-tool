@@ -1,14 +1,22 @@
-# Methode: Auto-Labeling feiner Defekte mit messbarer Labelqualität
+# Methode: Auto-Labeling industrieller Defekte mit messbarer Labelqualität
 
-Dieses Dokument beschreibt *warum* die Pipeline so aufgebaut ist, wie sie ist. Ergebnisse und Zahlen
-stehen in [`RESULTS.md`](RESULTS.md).
+Dieses Dokument beschreibt die **aktuell implementierte** Pipeline (v0.1) und warum sie so aufgebaut
+ist. Der Einsatzrahmen ist aufgabenunabhängig: verschiedene Produkte, Materialien und Kameras, Defekte
+klein bis groß, eine oder mehrere Klassen.
+
+> **Weiterentwicklung:** Die Recherche vom Oktober 2026 ([`research/00_SYNTHESE.md`](research/00_SYNTHESE.md))
+> hat Schwächen dieser Version aufgedeckt. Die wichtigste: **Die Recall-Garantie aus 3.5 gilt für die
+> ungelabelten Bilder so nicht** (Schwellentransfer OOF→Ensemble, in-sample Self-Training, abhängige
+> Komponenten). Außerdem unterdecken die Audit-Intervalle aus 3.7 bei seltenen Defekten. Der
+> Nachfolger heißt **CertAL**: Zertifikate kommen dort aus einem randomisierten, sequentiellen Audit
+> (Measure-and-Repair). Bis das umgesetzt ist, die Ausgaben von 3.5/3.7 als *approximativ* behandeln.
 
 ## 1. Problemanalyse → Designprinzipien
 
 | Eigenschaft der Aufgabe | Konsequenz für das Design |
 |---|---|
 | Sehr wenige Masken, viele ungelabelte Bilder | Ungelabelte Bilder müssen *aktiv* genutzt werden: als Normalitätsmodell, als Hintergründe für Defektsynthese, für Self-Training |
-| Defekte klein, dünn (1–3 px), kontrastarm | Vorhersage in voller Auflösung (Stride 1), Hysterese-Schwellen, Metriken mit Randtoleranz |
+| Defekte von wenigen Pixeln (z. B. 1–3 px breite Risse) bis zu großen Flächen, oft kontrastarm | Vorhersage in voller Auflösung (Stride 1), Hysterese-Schwellen, Metriken mit Randtoleranz und Auswertung auf Defektebene |
 | Starkes Klassenungleichgewicht | defektzentriertes Cropping, Dice+BCE, Schwellen auf Validierungsdaten statt 0.5 |
 | Reflexionen, Texturen, Staub als Fehlalarm-Quellen | Defekte auf *echte* ungelabelte Oberflächen synthetisieren → das Modell sieht tausende Varianten normaler Oberfläche |
 | Defektgrenze subjektiv | Toleranzmetriken, Ignore-Ringe um Pseudo-Labels |
@@ -55,7 +63,7 @@ Wahrscheinlichkeiten + horizontales Flip-TTA); ihre Uneinigkeit ist ein Unsicher
 ### 3.2 Netzarchitektur
 U-Net mit ImageNet-vortrainiertem Encoder (Standard `resnet18d`, Gewichte von den timm-GitHub-Releases)
 und einem zusätzlichen **Full-Resolution-Stem**, dessen Features in der letzten Decoder-Stufe konkateniert
-werden. Logits entstehen in voller Auflösung – 1–2 px breite Kratzer werden nicht wegskaliert.
+werden. Logits entstehen in voller Auflösung – auch 1–2 px breite Defekte werden nicht wegskaliert.
 Training auf 192×192-Crops, 60 % der Crops defektzentriert, BCE+Dice-Loss, AdamW mit Cosine-Schedule.
 
 ### 3.3 Ungelabelte Daten (A, B, E)
@@ -86,7 +94,7 @@ damit echte, ungelabelte Defekte im Hintergrund nicht als „normal“ gelernt w
 
 ### 3.4 Von Wahrscheinlichkeiten zu Labels
 **Hysterese-Schwellen**: eine Region `p ≥ t_ext` wird übernommen, wenn sie mindestens ein Pixel
-`p ≥ t_seed` enthält (und ≥ min_area). Schwache Teile eines Kratzers, die mit einem deutlichen Teil
+`p ≥ t_seed` enthält (und ≥ min_area). Schwache Teile eines Defekts, die mit einem deutlichen Teil
 verbunden sind, bleiben erhalten; isolierte schwache Antworten (Textur) fallen weg. `(t_seed, t_ext,
 min_area)` werden per Grid-Search auf den OOF-Vorhersagen gewählt (Ziel: Pixel-F1 mit 2-px-Toleranz).
 

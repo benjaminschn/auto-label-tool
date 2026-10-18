@@ -1,11 +1,12 @@
 # auto-label-tool
 
-Automatisches, pixelgenaues Labeling von Kratzern und feinen Oberflächendefekten aus **sehr wenigen
-Masken** – mit **messbarer, statistisch abgesicherter Labelqualität**.
+Automatisches, pixelgenaues Labeling anspruchsvoller industrieller Defekte – klein oder groß, eine oder
+mehrere Klassen, beliebige Aufgaben – aus **sehr wenigen Masken**, mit **messbarer, statistisch
+abgesicherter Labelqualität**.
 
-> Status: Forschungs-Prototyp, Benchmark-Läufe stehen noch aus. Stand, offene Punkte und
-> Experimentplan: [`docs/HANDOFF.md`](docs/HANDOFF.md). Methode und Begründungen:
-> [`docs/METHOD.md`](docs/METHOD.md).
+> Status: Forschungs-Prototyp (v0.1), Benchmark-Läufe stehen noch aus. Stand und Experimentplan:
+> [`docs/HANDOFF.md`](docs/HANDOFF.md). Implementierte Methode: [`docs/METHOD.md`](docs/METHOD.md).
+> **Forschungsstand und Nachfolger-Konzept „CertAL“:** [`docs/research/00_SYNTHESE.md`](docs/research/00_SYNTHESE.md).
 
 ## Die Idee in fünf Sätzen
 

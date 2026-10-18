@@ -1,6 +1,7 @@
 # auto-label-tool – Hinweise für Claude Code
 
 - Projektstand, offene Punkte und Experimentplan: `docs/HANDOFF.md` (zuerst lesen).
+- Forschungsstand und Zielarchitektur „CertAL“: `docs/research/00_SYNTHESE.md` (Roadmap §6); Einzelberichte 01–07 in `docs/research/`.
 - Methode und Begründungen: `docs/METHOD.md`. Dokumentation ist auf Deutsch, Code/Kommentare auf Englisch.
 - Tests: `python -m pytest -q` (schnell, CPU).
 - Benchmarks sind teuer: erst Mini-Smoke-Test (`--iters 20 --k-folds 2 --max-unlabeled 40`), dann volle Läufe.
