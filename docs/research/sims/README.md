@@ -10,3 +10,10 @@ python docs/research/sims/sim3.py              # S2: Fehlbildrate ζ (exakt hype
 ```
 
 Prototypen, nicht Teil des Pakets; sie dienen als Ausgangspunkt für `autolabel/ppi.py` v2.
+
+## Red-Team-Prüfungen (Bericht 07)
+
+```bash
+python docs/research/sims/redteam_capture_recapture.py   # 06: Transporttest, HT/Huggins/Hybrid unter Annahmeverletzungen (~10 s)
+python docs/research/sims/redteam_audit_checks.py        # 04: Prop. 3, Optional Stopping, Kacheln, Satz 2, Mensch ≠ Gold (~1–2 min)
+```
