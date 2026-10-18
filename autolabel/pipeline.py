@@ -33,6 +33,8 @@ class AutoLabelConfig:
     anomaly_backbone: str = "wide_resnet50_2"
     anomaly_patches_per_image: int = 64
     bg_clean_frac: float = 0.7           # use the most normal-looking share of U as synthesis backgrounds
+    bg_ignore_quantile: float = 0.98     # round 0: ignore the most anomalous pixels of backgrounds (may be
+                                         # unlabeled real defects); later rounds use teacher pseudo-labels
     tta: str = "hflip"
     tol: int = 2
     merge_radius: int = 2
@@ -85,6 +87,7 @@ class AutoLabeler:
         # 1) normality model from the unlabeled pool
         anomaly_U = anomaly_L = None
         bg_idx = list(range(len(U_img)))
+        bg_labels0 = None
         if cfg.use_anomaly:
             from .anomaly import NormalityModel
             t0 = time.time()
@@ -96,6 +99,11 @@ class AutoLabeler:
             img_score = np.array([float(a.max()) for a in anomaly_U])
             order = np.argsort(img_score)
             bg_idx = sorted(order[: max(1, int(round(cfg.bg_clean_frac * len(order))))].tolist())
+            if cfg.bg_ignore_quantile < 1:
+                sub = np.concatenate([a.astype(np.float32).ravel()[::11] for a in anomaly_U])
+                thr = float(np.quantile(sub, cfg.bg_ignore_quantile))
+                bg_labels0 = [(np.zeros(U_img[i].shape[:2], bool),
+                               (anomaly_U[i].astype(np.float32) < thr).astype(np.float32)) for i in bg_idx]
             res["anomaly_image_score_U"] = img_score
             res["anomaly_image_score_L"] = np.array([float(a.max()) for a in anomaly_L])
             log(f"normality model done in {time.time() - t0:.0f}s; {len(bg_idx)} clean backgrounds")
@@ -117,7 +125,8 @@ class AutoLabeler:
                 train_L = [(L_img[j], L_msk[j]) for j in range(len(labeled)) if j not in fold_set]
                 if not train_L:   # leave-one-out with a single labeled image: train on it anyway
                     train_L = [(L_img[j], L_msk[j]) for j in range(len(labeled))]
-                data = TrainData(labeled=train_L, backgrounds=[U_img[i] for i in bg_idx])
+                data = TrainData(labeled=train_L, backgrounds=[U_img[i] for i in bg_idx],
+                                 background_labels=bg_labels0)
                 tcfg = dataclasses.replace(cfg.train, seed=cfg.seed * 1000 + r * 100 + k)
                 if r > 0:
                     t_probs = [m[k] if cfg.teacher == "fold" else m.mean(0) for m in teacher_members]

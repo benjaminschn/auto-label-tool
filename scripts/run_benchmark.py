@@ -58,6 +58,8 @@ def main():
     ap.add_argument("--p-procedural", type=float, default=0.0)
     ap.add_argument("--p-pseudo", type=float, default=0.4)
     ap.add_argument("--no-anomaly", action="store_true")
+    ap.add_argument("--bg-ignore-quantile", type=float, default=0.98)
+    ap.add_argument("--k-anomaly-patches", type=int, default=64)
     ap.add_argument("--teacher", default="fold", choices=["fold", "ensemble"])
     ap.add_argument("--no-rot90", action="store_true")
     ap.add_argument("--boundary-ignore", type=int, default=0)
@@ -88,7 +90,9 @@ def main():
     tcfg = TrainConfig(encoder=a.encoder, crop=a.crop, iters=a.iters, p_synth=a.p_synth,
                        p_procedural=a.p_procedural, rot90=not a.no_rot90, boundary_ignore=a.boundary_ignore)
     cfg = AutoLabelConfig(train=tcfg, k_folds=a.k_folds, rounds=a.rounds, st_iters=a.st_iters,
-                          p_pseudo=a.p_pseudo, use_anomaly=not a.no_anomaly, teacher=a.teacher, seed=a.seed)
+                          p_pseudo=a.p_pseudo, use_anomaly=not a.no_anomaly, teacher=a.teacher, seed=a.seed,
+                          bg_ignore_quantile=a.bg_ignore_quantile,
+                          anomaly_patches_per_image=a.k_anomaly_patches)
     log("config: " + json.dumps(jsonable(cfg.to_dict())))
     res = AutoLabeler(cfg, log=log, workdir=None).run(L, U, X)
 

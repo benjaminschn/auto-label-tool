@@ -151,3 +151,25 @@ def test_unet_forward_shape():
     with torch.no_grad():
         y = m(torch.randn(1, 3, 64, 96))
     assert y.shape == (1, 1, 64, 96)
+
+
+def test_normality_knn_excludes_own_image():
+    import torch
+    from autolabel.anomaly import NormalityModel
+    torch.manual_seed(0)
+    m = NormalityModel.__new__(NormalityModel)
+    m.k, m.ppi = 3, 5
+    feats = {i: torch.randn(16, 8) for i in range(6)}
+    bank, ids = [], []
+    for i in range(6):
+        sel = torch.randperm(16)[:5]
+        bank.append(feats[i][sel])
+        ids.append(torch.full((5,), i))
+    m.bank, m.bank_ids = torch.cat(bank), torch.cat(ids)
+    m.bank_sq = (m.bank ** 2).sum(1)
+    for i in range(6):
+        q = feats[i]
+        dist = (q ** 2).sum(1, keepdim=True) - 2 * q @ m.bank.T + m.bank_sq[None]
+        dist[:, m.bank_ids == i] = float("inf")
+        ref = torch.topk(dist, 3, dim=1, largest=False).values[:, -1].clamp(min=0).sqrt()
+        assert torch.allclose(m.knn_distance(q, i), ref, atol=1e-5)
