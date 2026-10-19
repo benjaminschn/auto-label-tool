@@ -17,6 +17,7 @@ from . import metrics as M
 from .calibration import IsotonicCalibrator, expected_calibration_error
 from .data import Sample, kfold_indices
 from .infer import predict_image
+from .model import free_device_memory
 from .postprocess import hysteresis, select_thresholds
 from .quality import CandidateModel, image_quality, review_risk
 from .train import TrainConfig, TrainData, train_member
@@ -115,6 +116,7 @@ class AutoLabeler:
             anomaly_U = nm.score_many(U_img, list(range(len(U_img))), log=log)
             anomaly_L = nm.score_many(L_img)
             del nm
+            free_device_memory()
             img_score = np.array([float(a.max()) for a in anomaly_U])
             order = np.argsort(img_score)
             bg_idx = sorted(order[: max(1, int(round(cfg.bg_clean_frac * len(order))))].tolist())
@@ -160,11 +162,16 @@ class AutoLabeler:
                     oof[j] = predict_image(model, L_img[j], cfg.tta)
                 for i, img in enumerate(U_img):
                     member_U[i].append(predict_image(model, img, cfg.tta).astype(np.float16))
+                    if i % 100 == 99:
+                        free_device_memory()
                 for i, img in enumerate(X_img):
                     member_X[i].append(predict_image(model, img, cfg.tta).astype(np.float16))
+                    if i % 100 == 99:
+                        free_device_memory()
                 if self.workdir:
                     torch.save(model.state_dict(), os.path.join(self.workdir, f"member_r{r}_k{k}.pt"))
                 del model
+                free_device_memory()
             member_U = [np.stack(m) for m in member_U]
             mean_U = [m.astype(np.float32).mean(0) for m in member_U]
             mean_X = [np.stack(m).astype(np.float32).mean(0) for m in member_X]

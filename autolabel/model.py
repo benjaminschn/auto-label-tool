@@ -43,6 +43,27 @@ def memory_format(dev: torch.device) -> torch.memory_format:
     return torch.contiguous_format if dev.type == "mps" else torch.channels_last
 
 
+# Inputs are padded to multiples of this size before inference, which bounds the number of distinct
+# input shapes (MPS caches one kernel graph per shape; Magnetic Tile has hundreds of image sizes).
+# Measured on the M4: no visible effect on the memory footprint (the 7 GB peak came from the kNN
+# distance blocks, see anomaly.py), inference 35-40 -> 26 ms/image on MT.
+PAD_MULTIPLE = int(os.environ.get("AUTOLABEL_PAD_MULTIPLE", 64))
+
+
+def free_device_memory():
+    """Return cached accelerator memory to the system.
+
+    The MPS caching allocator keeps freed blocks; two parallel benchmark runs pushed the 16 GB M4 into
+    swap. Called after model phases and periodically during inference.
+    """
+    import gc
+    gc.collect()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def set_threads(n: int):
     """n > 0 limits torch CPU threads; 0 keeps torch's default (all cores)."""
     if n and n > 0:

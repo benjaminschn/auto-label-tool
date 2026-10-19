@@ -20,7 +20,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .model import create_encoder, get_device, normalize, set_threads
+from .model import PAD_MULTIPLE, create_encoder, free_device_memory, get_device, normalize, set_threads
 
 
 class NormalityModel:
@@ -38,12 +38,13 @@ class NormalityModel:
         self.bank: Optional[torch.Tensor] = None
         self.bank_ids: Optional[torch.Tensor] = None
         self.offsets = {}   # image id -> (start, end) of its patches in the bank (contiguous)
+        self.chunk = 512    # query patches per distance block (memory ~ chunk x bank x 4 bytes)
 
     @torch.no_grad()
     def features(self, img: np.ndarray) -> torch.Tensor:
         x = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)[None].to(self.dev)
         h, w = x.shape[-2:]
-        ph, pw = (-h) % 16, (-w) % 16
+        ph, pw = (-h) % PAD_MULTIPLE, (-w) % PAD_MULTIPLE   # coarse grid of shapes (see model.py)
         x = F.pad(x, (0, pw, 0, ph), mode="replicate")
         feats = self.encoder(normalize(x))
         size = feats[0].shape[-2:]
@@ -58,7 +59,10 @@ class NormalityModel:
         for i, img in enumerate(images):
             f = self.features(img).reshape(-1, self.proj_dim)
             sel = self.rng.choice(len(f), min(self.ppi, len(f)), replace=False)
-            bank.append(f[torch.from_numpy(sel).to(f.device)])
+            bank.append(f[torch.from_numpy(sel).to(f.device)].clone())
+            del f
+            if i % 50 == 49:
+                free_device_memory()
             ids.append(torch.full((len(sel),), i, dtype=torch.long))
             self.offsets[i] = (pos, pos + len(sel))
             pos += len(sel)
@@ -74,6 +78,8 @@ class NormalityModel:
         """Distance of each query patch to its k-th nearest bank patch from another image."""
         if not hasattr(self, "offsets"):
             self.offsets = {}
+        if not hasattr(self, "chunk"):
+            self.chunk = 512
         if image_id is not None and image_id not in self.offsets:
             # bank built elsewhere (e.g. tests): derive contiguous ranges from the id vector
             ids = self.bank_ids.cpu().numpy()
@@ -81,14 +87,18 @@ class NormalityModel:
                 w = np.flatnonzero(ids == j)
                 self.offsets[int(j)] = (int(w[0]), int(w[-1]) + 1)
         kth = torch.empty(len(q), device=q.device)
-        for c in range(0, len(q), 2048):   # chunked to bound memory
-            qc = q[c:c + 2048]
-            dist = (qc ** 2).sum(1, keepdim=True) - 2 * qc @ self.bank.T + self.bank_sq[None]
+        cs = self.chunk
+        for c in range(0, len(q), cs):     # chunked to bound memory (one chunk x bank matrix at a time)
+            qc = q[c:c + cs]
+            # ||q||^2 - 2 q.b + ||b||^2 in one fused op (fewer chunk x bank temporaries)
+            dist = torch.addmm(self.bank_sq[None], qc, self.bank.T, beta=1.0, alpha=-2.0)
+            dist += (qc ** 2).sum(1, keepdim=True)
             if image_id is not None:
                 s, e = self.offsets[image_id]
                 dist[:, s:e] = float("inf")     # never explain a patch by its own image
             vals = torch.topk(dist, self.k, dim=1, largest=False).values
-            kth[c:c + 2048] = vals[:, self.k - 1].clamp(min=0).sqrt()
+            kth[c:c + cs] = vals[:, self.k - 1].clamp(min=0).sqrt()
+            del dist, vals
         return kth
 
     @torch.no_grad()
@@ -108,6 +118,8 @@ class NormalityModel:
         out = []
         for i, img in enumerate(images):
             out.append(self.score(img, None if image_ids is None else image_ids[i]).astype(np.float16))
+            if i % 50 == 49:
+                free_device_memory()
             if log and i % 200 == 0:
                 log(f"  anomaly maps {i}/{len(images)}")
         return out

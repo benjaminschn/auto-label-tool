@@ -7,10 +7,10 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .model import memory_format, normalize
+from .model import PAD_MULTIPLE, memory_format, normalize
 
 
-def _pad32(x: torch.Tensor, m: int = 32):
+def _pad32(x: torch.Tensor, m: int = PAD_MULTIPLE):
     h, w = x.shape[-2:]
     ph, pw = (-h) % m, (-w) % m
     if ph or pw:
