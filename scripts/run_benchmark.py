@@ -24,7 +24,7 @@ from autolabel.data import load_dataset, make_split  # noqa: E402
 from autolabel.pipeline import AutoLabelConfig, AutoLabeler  # noqa: E402
 from autolabel.train import TrainConfig  # noqa: E402
 
-DATASET_KW = {"mt": {}, "bsdata": {"scale": 0.5}, "deepcrack": {}, "cfd": {}}
+DATASET_KW = {"mt": {}, "bsdata": {"scale": 0.5}, "deepcrack": {}, "cfd": {}, "ksdd2": {}}
 
 
 def jsonable(o):
@@ -108,6 +108,11 @@ def main():
         log(f"round {rr['round']}: U " + " ".join(f"{k}={report['rounds'][-1]['U'][k]:.3f}" for k in
                                                   ("tol_f1", "px_f1", "defect_recall", "defect_precision",
                                                    "img_recall", "img_specificity", "px_ap")))
+    report["phase1"] = E.phase1_report(res, report["rounds"], gts_U)
+    for j, r in enumerate(report["phase1"]["rounds"]):
+        log(f"round {j}: zeta={r['pool']['zeta']:.3f} (K={r['pool']['K']}/{r['pool']['N']}) "
+            f"phi={r['pool']['phi']:.3f} " + " ".join(
+                f"rec_{c}={v['recall']:.2f}(n={v['n']})" for c, v in r['pool']['size_classes'].items()))
     report["conformal"] = E.conformal_check(res["rounds"][-1], gts_U)
     report["self_assessment"] = E.self_assessment(res, gts_U)
     report["audit"] = E.audit_simulation(res, gts_U)

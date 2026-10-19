@@ -39,6 +39,7 @@ def main():
             if j < len(old_rounds) and "U_single_member" in old_rounds[j]:
                 r["U_single_member"] = old_rounds[j]["U_single_member"]
             report["rounds"].append(r)
+        report["phase1"] = E.phase1_report(res, report["rounds"], gts_U)
         report["conformal"] = E.conformal_check(res["rounds"][-1], gts_U)
         report["self_assessment"] = E.self_assessment(res, gts_U)
         report["audit"] = E.audit_simulation(res, gts_U)

@@ -17,6 +17,21 @@ import numpy as np
 from scipy import ndimage as ndi
 
 _DISKS: Dict[int, np.ndarray] = {}
+_POOL = None
+
+
+def eval_pool():
+    """Shared thread pool for per-image evaluation (cv2 releases the GIL; ~4x faster on 8 threads).
+
+    Size from AUTOLABEL_EVAL_THREADS (default: min(8, cpu_count)); results are returned in order.
+    """
+    global _POOL
+    if _POOL is None:
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+        n = int(os.environ.get("AUTOLABEL_EVAL_THREADS", min(8, os.cpu_count() or 1)))
+        _POOL = ThreadPoolExecutor(max(1, n))
+    return _POOL
 
 
 def disk(r: int) -> np.ndarray:
@@ -182,7 +197,9 @@ def average_precision_px(probs, gts, bins: int = 2000) -> float:
 def summarize(preds, gts, tol: int = 2, merge_radius: int = 2, probs: Optional[list] = None,
               infos: Optional[list] = None) -> Dict[str, float]:
     infos = infos or [None] * len(gts)
-    stats = [image_stats(p, g, tol, merge_radius, inf) for p, g, inf in zip(preds, gts, infos)]
+    preds, gts = list(preds), list(gts)
+    stats = list(eval_pool().map(lambda i: image_stats(preds[i], gts[i], tol, merge_radius, infos[i]),
+                                 range(len(gts))))
     out = aggregate(stats)
     if probs is not None:
         out["img_auroc"] = auroc(np.array([p.max() for p in probs]), np.array([g.any() for g in gts]))

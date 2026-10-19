@@ -263,3 +263,71 @@ def test_synthetic_sample_weights_ignore_invisible_paste():
         _, tgt, w = gen._synthetic()
         assert not tgt.any()
         assert (w == 0).any()
+
+
+# --------------------------------------------------------------------------- Phase-1 pool metrics
+
+def test_pool_errors_zeta_phi_and_size_classes():
+    from autolabel import evaluate as E
+    g1 = np.zeros((40, 40), bool); g1[5:7, 5:30] = True            # 50 px -> class S, hit
+    p1 = np.zeros((40, 40), bool); p1[5:7, 5:20] = True
+    g2 = np.zeros((40, 40), bool); g2[10:25, 10:25] = True          # 225 px -> class M, missed
+    p2 = np.zeros((40, 40), bool); p2[35:38, 35:38] = True          # one false component
+    g3 = np.zeros((40, 40), bool)                                   # clean image, two false comps
+    p3 = np.zeros((40, 40), bool); p3[0:2, 0:2] = True; p3[30:33, 0:3] = True
+    pe = E.pool_errors([p1, p2, p3], [g1, g2, g3])
+    assert pe["b"].tolist() == [0, 1, 0] and pe["F"].tolist() == [0, 1, 2]
+    s = E.pool_summary(pe)
+    assert s["K"] == 1 and abs(s["zeta"] - 1 / 3) < 1e-9 and abs(s["phi"] - 1.0) < 1e-9
+    assert s["phi_clean"] == 2.0 and abs(s["img_recall_rho_b"] - 0.5) < 1e-9
+    assert s["size_classes"]["S"] == {"n": 1, "recall": 1.0}
+    assert s["size_classes"]["M"] == {"n": 1, "recall": 0.0}
+
+
+def test_kprime_curve_and_cost():
+    from autolabel import evaluate as E
+    from autolabel.certify import plan_n
+    b = np.zeros(200, np.int64); b[[3, 50, 120]] = 1
+    risk = np.zeros(200); risk[3], risk[50] = 1.0, 0.9                # two misses ranked first
+    ranks = E.bad_ranks(b, np.argsort(-risk, kind="stable"))
+    assert ranks[:2].tolist() == [0, 1] and E.kprime_at(ranks, [0, 1, 2, 200]) == [3, 2, 1, 0]
+    rep = E.kprime_report(b, risk, zeta_targets=(0.02,), ratios=(1.0,), n_random=5)
+    assert rep["K"] == 3 and rep["K_prime"]["risk"][0] == 3 and rep["K_prime"]["oracle"][-1] == 0
+    c = rep["cost"]["zeta*=0.02/c_review=1.0"]
+    n90_k0 = plan_n(200, 3, 4, 0.05, 0.9)[0]
+    assert c["risk"]["n90_k0"] == n90_k0 and c["risk"]["cost_k0"] == n90_k0
+    assert c["oracle"]["cost_min"] <= c["risk"]["cost_min"] <= c["risk"]["cost_k0"]
+    st = E.strata_report(b, {"defective": b > 0}, risk, n_strata=5)["strata"]
+    assert sum(x["n"] for x in st) == 200 and st[-1]["bad"] == 2
+
+
+def test_load_ksdd2_layout(tmp_path):
+    from PIL import Image
+    from autolabel.data import load_ksdd2
+    for split in ("train", "test"):
+        (tmp_path / split).mkdir()
+    img = np.full((60, 20, 3), 100, np.uint8)
+    gt = np.zeros((60, 20), np.uint8); gt[10:14, 5:9] = 255
+    Image.fromarray(img).save(tmp_path / "train" / "10000.png")
+    Image.fromarray(gt).save(tmp_path / "train" / "10000_GT.png")
+    Image.fromarray(img).save(tmp_path / "test" / "20000.png")
+    Image.fromarray(np.zeros_like(gt)).save(tmp_path / "test" / "20000_GT.png")
+    S = load_ksdd2(str(tmp_path))
+    assert [s.id for s in S] == ["ksdd2/train/10000", "ksdd2/test/20000"]
+    assert S[0].has_defect and S[0].mask.sum() == 16 and not S[1].has_defect and S[1].kind == "free"
+
+
+def test_hysteresis_matches_reference_definition():
+    from scipy import ndimage as ndi
+    rng = np.random.RandomState(3)
+    for _ in range(20):
+        p = ndi.gaussian_filter(rng.rand(50, 60), 1.5)
+        p = (p - p.min()) / (p.max() - p.min())
+        ts, te, a = rng.uniform(0.5, 0.9), rng.uniform(0.2, 0.5), int(rng.choice([0, 4, 12]))
+        lab, n = ndi.label(p >= te, structure=np.ones((3, 3)))
+        ref = np.zeros_like(p, bool)
+        for k in range(1, n + 1):
+            c = lab == k
+            if p[c].max() >= ts and c.sum() >= a:
+                ref |= c
+        assert np.array_equal(hysteresis(p, ts, te, a), ref)

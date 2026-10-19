@@ -120,6 +120,30 @@ def load_crackforest(root: str, scale: float = 1.0) -> List[Sample]:
     return out
 
 
+def load_ksdd2(root: str, scale: float = 1.0) -> List[Sample]:
+    """KolektorSDD2 (Božič, Tabernik, Skočaj 2021), www.vicos.si/resources/kolektorsdd2/.
+
+    Expected layout (as distributed): ``root/train`` and ``root/test`` with ``<id>.png`` images and
+    ``<id>_GT.png`` masks. The official train/test split is ignored; our own few-label protocol
+    (``make_split``) is applied to the union. Every image is its own group (no sequence info).
+    """
+    out = []
+    for split in ("train", "test"):
+        for f in sorted(glob.glob(os.path.join(root, split, "*.png"))):
+            if f.endswith("_GT.png"):
+                continue
+            sid = os.path.basename(f)[:-4]
+            gtf = os.path.join(root, split, sid + "_GT.png")
+            m = np.array(Image.open(gtf).convert("L")) > 0 if os.path.exists(gtf) else None
+            img = _rgb(f)
+            if m is not None and m.shape != img.shape[:2]:
+                m = np.array(Image.fromarray(m.astype(np.uint8) * 255).resize(img.shape[1::-1], Image.NEAREST)) > 0
+            out.append(Sample(f"ksdd2/{split}/{sid}", _resize(img, scale),
+                              None if m is None else _resize(m, scale),
+                              kind="defect" if m is not None and m.any() else "free", group=f"{split}/{sid}"))
+    return out
+
+
 def load_folder(images_dir: str, masks_dir: Optional[str] = None, mask_suffix: str = "",
                 exts=(".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"), scale: float = 1.0) -> List[Sample]:
     """Generic loader for custom data: ``images_dir/<name>.<ext>`` and optional ``masks_dir/<name><suffix>.png``.
@@ -148,6 +172,7 @@ LOADERS: Dict[str, Callable[..., List[Sample]]] = {
     "bsdata": load_bsdata,
     "deepcrack": load_deepcrack,
     "cfd": load_crackforest,
+    "ksdd2": load_ksdd2,
 }
 
 DEFAULT_ROOTS = {
@@ -155,6 +180,7 @@ DEFAULT_ROOTS = {
     "bsdata": "BSData",
     "deepcrack": "DeepCrack",
     "cfd": "CrackForest-dataset",
+    "ksdd2": "KolektorSDD2",
 }
 
 

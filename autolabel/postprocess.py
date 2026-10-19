@@ -20,13 +20,14 @@ def hysteresis(prob: np.ndarray, t_seed: float, t_ext: float, min_area: int = 0)
     if not ext.any():
         return ext
     lab, n = ndi.label(ext, structure=np.ones((3, 3)))
-    mx = ndi.maximum(prob, lab, index=np.arange(1, n + 1))
-    keep = np.asarray(mx) >= t_seed
+    # a component is kept iff it contains a seed pixel (equivalent to max >= t_seed, but much faster
+    # than a per-label maximum when there are many components)
+    keep = np.zeros(n + 1, bool)
+    keep[np.unique(lab[prob >= t_seed])] = True
+    keep[0] = False
     if min_area > 0:
-        area = ndi.sum(np.ones_like(prob), lab, index=np.arange(1, n + 1))
-        keep &= np.asarray(area) >= min_area
-    lut = np.concatenate([[False], keep])
-    return lut[lab]
+        keep &= np.bincount(lab.ravel(), minlength=n + 1) >= min_area
+    return keep[lab]
 
 
 def candidates(prob: np.ndarray, t_low: float):
@@ -52,12 +53,14 @@ def select_thresholds(probs: Sequence[np.ndarray], gts: Sequence[np.ndarray], to
         seed_grid = (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
     best, best_val, best_m = None, -1.0, None
     fallback, fb_rec = None, -1.0
-    infos = [M.GTInfo(g, tol, merge_radius) for g in gts]
+    pool = M.eval_pool()
+    infos = list(pool.map(lambda g: M.GTInfo(g, tol, merge_radius), gts))
     for ts in seed_grid:
         for r in ext_ratios:
             for a in min_areas:
-                preds = [hysteresis(p, ts, ts * r, a) for p in probs]
-                m = M.summarize(preds, gts, tol, merge_radius, infos=infos)
+                stats = list(pool.map(lambda i: M.image_stats(hysteresis(probs[i], ts, ts * r, a), gts[i], tol,
+                                                              merge_radius, infos[i]), range(len(gts))))
+                m = M.aggregate(stats)
                 val = m.get(objective, 0.0)
                 val = 0.0 if val != val else val
                 rec = m["defect_recall"] if m["defect_recall"] == m["defect_recall"] else 1.0

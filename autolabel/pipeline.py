@@ -71,6 +71,25 @@ class AutoLabeler:
             ign |= M.dilate(pos, self.cfg.ignore_ring) & ~pos
         return pos, (~ign).astype(np.float32)
 
+    def _assess(self, rr: Dict, member_U, L_msk, anomaly_U, anomaly_L):
+        """Label-free self-assessment features of one round's U labels and of the OOF labels on L."""
+        cfg = self.cfg
+        th, oof = rr["thresholds"], [p.astype(np.float32) for p in rr["oof_prob"]]
+        cal = IsotonicCalibrator().fit(oof, L_msk)
+        cand = CandidateModel(t_low=max(0.02, 0.25 * th["t_ext"]), tol=cfg.tol,
+                              merge_radius=cfg.merge_radius).fit(oof, L_msk)
+        feats = []
+        for i in range(len(rr["prob_U"])):
+            p = rr["prob_U"][i].astype(np.float32)
+            feats.append(image_quality(p, cal(p), rr["mask_U"][i], cand, member_U[i],
+                                       None if anomaly_U is None else anomaly_U[i], th["t_ext"]))
+        oof_feats = []
+        for j in range(len(oof)):
+            oof_feats.append(image_quality(oof[j], cal(oof[j]),
+                                           hysteresis(oof[j], th["t_seed"], th["t_ext"], int(th["min_area"])),
+                                           cand, None, None if anomaly_L is None else anomaly_L[j], th["t_ext"]))
+        return feats, oof_feats, cand.no_candidate_rate
+
     # ------------------------------------------------------------------ main
     def run(self, labeled: Sequence[Sample], unlabeled: Sequence[Sample],
             extra: Optional[Sequence[Sample]] = None) -> Dict:
@@ -177,30 +196,22 @@ class AutoLabeler:
             }
             if cfg.keep_member_probs:
                 rr["member_U"] = member_U
+            # 3) self-assessment and review risk of this round's labels (per round, so that rounds can
+            #    be compared on the same footing, e.g. gate G1: recall in low-risk strata)
+            feats, oof_feats, no_cand = self._assess(rr, member_U, L_msk, anomaly_U, anomaly_L)
+            rr["features_U"], rr["features_oof"] = feats, oof_feats
+            rr["risk_U"] = review_risk(feats)
+            rr["candidate_no_cand_rate"] = no_cand
             res["rounds"].append(rr)
             teacher_members, teacher_th = member_U, th
             log(f"round {r} finished in {time.time() - t0:.0f}s")
 
-        # 3) self-assessment of the final labels
+        # final labels = last round (kept at top level for the CLI and older evaluation code)
         last = res["rounds"][-1]
-        th, oof = last["thresholds"], [p.astype(np.float32) for p in last["oof_prob"]]
-        cal = IsotonicCalibrator().fit(oof, L_msk)
-        cand = CandidateModel(t_low=max(0.02, 0.25 * th["t_ext"]), tol=cfg.tol,
-                              merge_radius=cfg.merge_radius).fit(oof, L_msk)
-        feats = []
-        for i in range(len(U_img)):
-            p = last["prob_U"][i].astype(np.float32)
-            feats.append(image_quality(p, cal(p), last["mask_U"][i], cand, teacher_members[i],
-                                       None if anomaly_U is None else anomaly_U[i], th["t_ext"]))
-        oof_feats = []
-        for j in range(len(labeled)):
-            oof_feats.append(image_quality(oof[j], cal(oof[j]),
-                                           hysteresis(oof[j], th["t_seed"], th["t_ext"], int(th["min_area"])),
-                                           cand, None, None if anomaly_L is None else anomaly_L[j], th["t_ext"]))
-        res["features_U"] = feats
-        res["features_oof"] = oof_feats
-        res["risk_U"] = review_risk(feats)
-        res["candidate_no_cand_rate"] = cand.no_candidate_rate
+        res["features_U"] = last["features_U"]
+        res["features_oof"] = last["features_oof"]
+        res["risk_U"] = last["risk_U"]
+        res["candidate_no_cand_rate"] = last["candidate_no_cand_rate"]
         if anomaly_U is not None:
             res["anomaly_U"] = anomaly_U
             res["anomaly_L"] = anomaly_L

@@ -162,6 +162,106 @@ def review_table(runs, keys, fracs=("0.00", "0.05", "0.10", "0.20", "0.30")):
     return "\n".join(out)
 
 
+# ----------------------------------------------------------------------------- Phase 1 (00 §6)
+
+def _rounds(reps):
+    return len(reps[0].get("phase1", {}).get("rounds", []))
+
+
+def phase1_pool_table(runs, keys):
+    out = ["| Variante | Runde | n | ζ (Fehlbildrate) | K | φ (Fehlkomp./Bild) | φ sauber | Bild-Recall ρ_b | SegF1 | Recall S | Recall M | Recall L |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for key in keys:
+        reps = [r for r in runs.get(key, []) if "phase1" in r]
+        if not reps:
+            continue
+        for j in range(_rounds(reps)):
+            P = f"phase1.rounds.{j}"
+            sc = lambda c: ms([get(r, f"{P}.pool.size_classes.{c}.recall") for r in reps])
+            nn = lambda c: ms([get(r, f"{P}.pool.size_classes.{c}.n") for r in reps], pct=False, digits=0)
+            out.append(f"| {key} | {j} | {len(reps)} | {ms([get(r, f'{P}.pool.zeta') for r in reps])} | "
+                       f"{ms([get(r, f'{P}.pool.K') for r in reps], pct=False, digits=0)} | "
+                       f"{ms([get(r, f'{P}.pool.phi') for r in reps], pct=False, digits=2)} | "
+                       f"{ms([get(r, f'{P}.pool.phi_clean') for r in reps], pct=False, digits=2)} | "
+                       f"{ms([get(r, f'{P}.pool.img_recall_rho_b') for r in reps])} | "
+                       f"{ms([get(r, f'{P}.seg_f1') for r in reps])} | "
+                       f"{sc('S')} (n={nn('S')}) | {sc('M')} (n={nn('M')}) | {sc('L')} (n={nn('L')}) |")
+    return "\n".join(out)
+
+
+def kprime_table(runs, keys):
+    fr = None
+    out = []
+    for key in keys:
+        reps = [r for r in runs.get(key, []) if "phase1" in r]
+        if not reps:
+            continue
+        fr = fr or get(reps[0], "phase1.rounds.0.kprime.fracs")
+        if not out:
+            out = ["| Variante | Runde | Reihenfolge | " + " | ".join(f"K′ nach {f:.0%}" for f in fr) +
+                   " | AUC K′/K |", "|---|---|---|" + "---|" * (len(fr) + 1)]
+        for j in range(_rounds(reps)):
+            for order, okey, akey in (("Risiko", "risk", "risk"), ("Zufall", "random_mean", "random"),
+                                      ("Orakel", "oracle", "oracle")):
+                vals = [[get(r, f"phase1.rounds.{j}.kprime.K_prime.{okey}")[i] for r in reps
+                         if get(r, f"phase1.rounds.{j}.kprime.K_prime.{okey}")] for i in range(len(fr))]
+                out.append(f"| {key} | {j} | {order} | " + " | ".join(ms(v, pct=False, digits=1) for v in vals) +
+                           f" | {ms([get(r, f'phase1.rounds.{j}.kprime.auc_K_prime.{akey}') for r in reps], pct=False, digits=3)} |")
+    return "\n".join(out)
+
+
+def cost_table(runs, keys):
+    out = ["| Variante | Runde | Ziel / Kostenverhältnis | n₉₀(K) ohne Review | Kosten min (Risiko) | k* (Risiko) | Kosten min (Zufall) | Kosten min (Orakel) | Ersparnis Risiko vs. k=0 |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    for key in keys:
+        reps = [r for r in runs.get(key, []) if "phase1" in r]
+        if not reps:
+            continue
+        for j in range(_rounds(reps)):
+            cks = sorted(get(reps[0], f"phase1.rounds.{j}.kprime.cost") or {})
+            for ck in cks:
+                C = lambda path: [get(r, f"phase1.rounds.{j}.kprime.cost.{ck}.{path}") for r in reps]
+                sav = [1 - a / b for a, b in zip(C("risk.cost_min"), C("risk.cost_k0")) if a is not None and b]
+                out.append(f"| {key} | {j} | {ck} | {ms(C('risk.n90_k0'), pct=False, digits=0)} | "
+                           f"{ms(C('risk.cost_min'), pct=False, digits=0)} | {ms(C('risk.k_star'), pct=False, digits=0)} | "
+                           f"{ms(C('random.cost_min'), pct=False, digits=0)} | {ms(C('oracle.cost_min'), pct=False, digits=0)} | "
+                           f"{ms(sav)} |")
+    return "\n".join(out)
+
+
+def g1_table(runs, keys):
+    out = ["| Variante | Runde | Bild-Recall je Risiko-Quintil (Runde-0-Risiko; Q1 = niedrigstes Risiko) | Anteil Fehlbilder unter Median des eigenen Risikos |",
+           "|---|---|---|---|"]
+    for key in keys:
+        reps = [r for r in runs.get(key, []) if "phase1" in r and get(r, "phase1.rounds.0.strata_ref")]
+        if not reps:
+            continue
+        for j in range(_rounds(reps)):
+            ns = len(get(reps[0], f"phase1.rounds.{j}.strata_ref.strata"))
+            cells = []
+            for q in range(ns):
+                v = [get(r, f"phase1.rounds.{j}.strata_ref.strata.{q}.img_recall") for r in reps]
+                cells.append(f"Q{q + 1}: {ms(v)}")
+            out.append(f"| {key} | {j} | " + " · ".join(cells) + f" | "
+                       f"{ms([get(r, f'phase1.rounds.{j}.share_bad_below_median_risk') for r in reps])} |")
+    return "\n".join(out)
+
+
+def g2_table(runs, keys):
+    out = ["| Variante | Runde | t_seed OOF | t_seed U-Oracle | t_ext OOF | t_ext U-Oracle | Δ tol-F1 (Oracle − OOF) | Δ Defekt-Recall | Δ Defekt-Precision |",
+           "|---|---|---|---|---|---|---|---|---|"]
+    for key in keys:
+        reps = [r for r in runs.get(key, []) if "phase1" in r]
+        if not reps:
+            continue
+        for j in range(_rounds(reps)):
+            G = lambda k: [get(r, f"phase1.rounds.{j}.g2_threshold_gap.{k}") for r in reps]
+            out.append(f"| {key} | {j} | {ms(G('t_seed_oof'), pct=False, digits=2)} | {ms(G('t_seed_oracle'), pct=False, digits=2)} | "
+                       f"{ms(G('t_ext_oof'), pct=False, digits=2)} | {ms(G('t_ext_oracle'), pct=False, digits=2)} | "
+                       f"{ms(G('tol_f1_gap'))} | {ms(G('defect_recall_gap'))} | {ms(G('defect_precision_gap'))} |")
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", default="runs/*")
@@ -187,6 +287,16 @@ def main():
     print(audit_table(runs, keys))
     print("\n## Review\n")
     print(review_table(runs, keys))
+    print("\n## Phase 1: Pool-Qualität (ζ, φ, Größenklassen)\n")
+    print(phase1_pool_table(runs, keys))
+    print("\n## Phase 1: K′(k) – Restfehlbilder nach Review der k riskantesten Bilder\n")
+    print(kprime_table(runs, keys))
+    print("\n## Phase 1: Kosten(k) = k·c_review + n₉₀(K′(k))·c_audit (Einheiten c_audit, δ = 0,05, Power 0,9)\n")
+    print(cost_table(runs, keys))
+    print("\n## Gate G1: Bild-Recall in Risiko-Strata je Runde\n")
+    print(g1_table(runs, keys))
+    print("\n## Gate G2: OOF-Schwelle vs. U-Oracle-Schwelle\n")
+    print(g2_table(runs, keys))
 
 
 if __name__ == "__main__":
