@@ -715,7 +715,10 @@ Daten. Jede Maßnahme wird mit dem Protokoll aus R5 gemessen.
 * **Warum das bei uns besser sein könnte:** Unsere jetzige Selbsteinschätzung leitet erwartete FN nur
   aus *A's eigenen* kalibrierten Wahrscheinlichkeiten ab. Defekte, die A gar nicht „sieht“, tragen
   dort fast nichts bei. Ein zweiter, strukturell anderer Detektor liefert genau diese fehlende
-  Information. Bessere f_i verengen die PPI-Intervalle; ihre Gültigkeit bleibt in jedem Fall erhalten.
+  Information. Bessere f_i verengen die PPI-Intervalle. **[Korr. 07 F5]** Die PPI-Intervalle sind nur approximativ
+  (t-Quantil, Delta-Methode); bei kleinen Audits und seltenen Defekten senkt ein schlechtes f_i auch ihre
+  Abdeckung. Gültig im designbasierten Sinn ist nur ein Audit mit exakter Schranke oder Betting mit
+  prädiktablen Größen unter den Bedingungen aus 07 §7 Nr. 7.
 * **Falsifizierbares Experiment:** Auf MT, KSDD2 und BSData (volle GT für U vorhanden) wird die wahre
   Zahl der von A *und* B übersehenen Defekte verglichen mit (i) dem jetzigen erwarteten FN aus A,
   (ii) dem unstratifizierten Chapman-Schätzer und (iii) dem stratifizierten Schätzer mit synthetischer

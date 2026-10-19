@@ -1,6 +1,18 @@
+"""S1 companion: IPW-CLT-Fieller vs. betting (beta-mixture) LCB for the defect recall under a PPS design.
+
+v2 (07_red_team.md, change 6 / F4 side remark): the predictable bet bound dropped the term
+(1 - r) * fD_i (it was multiplied by 0), so it was not a valid upper bound of Z for every unit. It is now
+the exact predictable bound z^max(r) = f_all(r) + max_i (r * D_MAX - f_i(r)) / (N q_i) over the whole pool
+(q and f are frozen before the first draw), and Z_t <= z^max is checked at run time; a violation
+invalidates the certificate (LCB := 0) instead of being skipped. The CLT column is approximate
+(asymptotic) by construction. b = r * D_MAX is a model assumption (07 F1), satisfied by make_pool.
+
+Run:  python3 docs/research/sims/sim2.py      (~1-2 min on a CPU)
+"""
 import sys, numpy as np
 sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from sim_recall_cert import make_pool, DMAX
+from autolabel.certify import check_floor   # repo root is on sys.path via sim_recall_cert
 from scipy.stats import norm
 
 def draws_pps(N, q, n_budget, rng):
@@ -16,8 +28,9 @@ def terms(D, M, fH, fD, q, idx, grid):
     y = M[idx][:, None] - (1 - r) * D[idx][:, None]
     f = fMh[idx][:, None] - (1 - r) * fD[idx][:, None]
     Z = f_all[None, :] + (y - f) / (N * q[idx][:, None])
-    zmax = f_all[None, :] + (r * DMAX - f) / (N * q[idx][:, None])
-    zmax_pred = f_all[None, :] + (r * DMAX + (1 - r) * fD.max() * 0 + np.abs(fMh).max()) / (N * q.min())  # predictable worst case
+    # predictable (F_0-measurable) bound: maximum over ALL units of the pool, not over the drawn ones
+    f_pool = fMh[:, None] - (1 - r) * fD[:, None]
+    zmax_pred = f_all + ((r * DMAX - f_pool) / (N * q[:, None])).max(0)
     return Z, np.broadcast_to(zmax_pred, Z.shape)
 
 def mix_reject(Z, zmax, c, delta, nb=24):
@@ -45,18 +58,23 @@ rng = np.random.default_rng(7); N, delta, reps = 2000, 0.05, 200
 grid = np.linspace(0, 1, 201)
 for prev in (0.03, 0.10, 0.30):
     for n in (30, 100):
-        res = {k: [] for k in ("bet_g0.3", "bet_unif", "clt_g0.3", "clt_unif")}; rhos = []
+        res = {k: [] for k in ("bet_g0.3", "bet_unif", "clt_g0.3", "clt_unif")}; rhos = []; viol = 0
         for _ in range(reps):
             D, M, fH, fM, fD, s2 = make_pool(N, prev, rng)
             rho = 1 - M.sum() / D.sum(); rhos.append(rho)
             sig = np.sqrt(s2 + 0.05 * fD + 1e-3)
             for name, gam in (("g0.3", 0.3), ("unif", 1.0)):
                 q = (1 - gam) * sig / sig.sum() + gam / N
+                check_floor(q, gam)               # floor q_i >= gamma / N (07 section 7 no. 7, (ii))
                 idx = draws_pps(N, q, n, rng)
                 Z, zmax = terms(D, M, fH, fD, q, idx, grid)
-                b = lcb_from_rej(mix_reject(Z, zmax, np.zeros(len(grid)), delta), grid)
+                if np.any(Z > zmax + 1e-9):       # runtime check: certificate invalid, no LCB
+                    viol += 1; b = 0.0
+                else:
+                    b = lcb_from_rej(mix_reject(Z, zmax, np.zeros(len(grid)), delta), grid)
                 res["bet_" + name].append((b <= rho, b))
                 c = clt_lcb(Z, grid, delta)
                 res["clt_" + name].append((c <= rho, c))
         print(f"prev={prev:.2f} n={n:3d} rho~{np.mean(rhos):.3f} | " + " | ".join(
-            f"{k}: cov={np.mean([a for a,_ in v]):.3f} LCB={np.mean([b for _,b in v]):.3f}" for k, v in res.items()), flush=True)
+            f"{k}: cov={np.mean([a for a,_ in v]):.3f} LCB={np.mean([b for _,b in v]):.3f}" for k, v in res.items())
+            + f" | bound violations={viol}", flush=True)

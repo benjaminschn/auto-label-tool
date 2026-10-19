@@ -4,8 +4,14 @@
     autolabel run --images images/ --masks masks/ --out run1/
 
     # 2) a human checks the images listed in run1/audit_sample.txt and stores corrected masks in audit/
-    # 3) statistically valid quality estimate of all auto-labels
+    # 3) APPROXIMATE quality estimate of all auto-labels (PPI, asymptotic; not a certificate,
+    #    see autolabel/ppi.py)
     autolabel estimate --run run1/ --audit-masks audit/
+
+    # CertAL-lite (exact, design-based zeta certificate, see autolabel/certify.py):
+    # plan the fixed audit size before the first draw, then certify with the registered n
+    autolabel certify-plan --N 2000 --forecast 10 --target 40 --delta 0.05
+    autolabel certify --found 1 --n 332 --N 2000 --delta 0.05 --registered-n 332 --target 40
 """
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ import time
 import numpy as np
 from PIL import Image
 
+from . import certify as CT
 from . import metrics as M
 from . import ppi
 from .data import load_folder
@@ -154,6 +161,26 @@ def cmd_estimate(a):
         json.dump(out, fh, indent=1)
 
 
+def cmd_certify_plan(a):
+    n, pw = CT.plan_n(a.N, a.forecast, a.target, a.delta, a.power, credit_found=not a.no_credit)
+    out = {"N": a.N, "K_forecast": a.forecast, "K_target": a.target, "zeta_target": a.target / a.N,
+           "delta": a.delta, "power_required": a.power, "credit_found": not a.no_credit,
+           "n": n, "power_achieved": pw,
+           "note": "register n before the first draw; the forecast affects power only, not validity"}
+    if n is None:
+        out["note"] = "no n <= N reaches the required power for this forecast"
+    print(json.dumps(out, indent=1))
+
+
+def cmd_certify(a):
+    try:
+        c = CT.certify_zeta(a.found, a.n, a.N, a.delta, a.registered_n, K_target=a.target)
+    except CT.CertificateRefused as err:
+        print(f"REFUSED: {err}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps(c.to_dict(), indent=1))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="autolabel")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -179,6 +206,22 @@ def main(argv=None):
     e.add_argument("--audit-masks", required=True)
     e.add_argument("--alpha", type=float, default=0.1)
     e.set_defaults(fn=cmd_estimate)
+    cp = sp.add_parser("certify-plan", help="exact fixed audit size n for the CertAL-lite zeta certificate")
+    cp.add_argument("--N", type=int, required=True, help="pool size (audit frame, review stratum included)")
+    cp.add_argument("--forecast", type=int, required=True, help="conservative forecast of bad units K'")
+    cp.add_argument("--target", type=int, required=True, help="target: max. bad units after correction")
+    cp.add_argument("--delta", type=float, default=0.05)
+    cp.add_argument("--power", type=float, default=0.9)
+    cp.add_argument("--no-credit", action="store_true", help="certify K <= target without crediting corrections")
+    cp.set_defaults(fn=cmd_certify_plan)
+    c = sp.add_parser("certify", help="exact zeta certificate (fixed registered n, uniform sample w/o replacement)")
+    c.add_argument("--found", type=int, required=True, help="bad units found (and corrected) in the audit")
+    c.add_argument("--n", type=int, required=True, help="audited units")
+    c.add_argument("--N", type=int, required=True, help="pool size")
+    c.add_argument("--delta", type=float, default=0.05)
+    c.add_argument("--registered-n", type=int, required=True, help="n registered before the first draw")
+    c.add_argument("--target", type=int, default=None, help="optional target on bad units after correction")
+    c.set_defaults(fn=cmd_certify)
     a = ap.parse_args(argv)
     a.fn(a)
 

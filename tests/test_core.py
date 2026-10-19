@@ -95,6 +95,18 @@ def test_ppi_ratio_coverage_and_width():
     assert np.mean(w_t) < 1.05 * np.mean(w_c)
 
 
+def test_ppi_ratio_trivial_interval_without_denominator():
+    # no defect in the audit and no predicted defect anywhere -> "no interval", not NaN bounds
+    z = np.zeros(10)
+    assert ppi.classical_ratio(z, z, 0.1, 100)[1:] == (0.0, 1.0)
+    e, lo, hi = ppi.estimate_ratio(z, z, z, z, np.zeros(90), np.zeros(90), 0.1)
+    assert np.isnan(e) and (lo, hi) == (0.0, 1.0)
+    # estimated denominator total <= 0 (self-assessment far above the audited truth)
+    fb = np.full(10, 5.0)
+    e, lo, hi = ppi.estimate_ratio(z, z, z, fb, np.zeros(90), np.zeros(90), 0.1)
+    assert np.isnan(e) and (lo, hi) == (0.0, 1.0)
+
+
 def test_ppi_mean_matches_truth_on_average():
     rng = np.random.RandomState(2)
     y = rng.beta(5, 2, 500)

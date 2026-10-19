@@ -722,9 +722,11 @@ oder über Break-even-Verhältnisse:
 * **c_inspect/c_verify.** Baseline (b) skaliert linear damit. Ein Gold-Audit kostet pro Bild
   vermutlich 5–10 × verify-first.
 * **c₀.** Kacheln lohnen nur bei c₀ ≲ 1–2 s [N].
-* **c_audit/c_review.** Bestimmt die Ertragsschwelle für das Review: Reviewen lohnt, solange der
-  Ertrag > (c_audit/c_review)/(dn₉₀/dK′) ist. Das sind ≈ 5,5 % bei ζ* = 0,02 und ≈ 2,5 % bei 0,01
-  [N].
+* **c_review/c_audit.** Bestimmt die Ertragsschwelle für das Review: Reviewen lohnt, solange der
+  Ertrag > (c_review/c_audit)/(dn₉₀/dK′) ist. Das sind ≈ 5,5 % bei ζ* = 0,02 und ≈ 2,5 % bei 0,01
+  [N]. (Korrektur nach Abschluss des Berichts: Die erste Fassung hatte das Kostenverhältnis
+  invertiert. Ein geprüftes Bild kostet c_review und spart y·(dn₉₀/dK′)·c_audit; so steht es auch in
+  00 §4.5.)
 
 γ und κ werden vorab fixiert und nie auf den H*-Instanzen getunt. Alle Baselines bekommen dieselben
 gültigen Schranken. **Vor Phase 4** steht eine einstündige Selbst-Zeitmessung: 50 MT- und 50
@@ -1038,5 +1040,7 @@ python docs/research/sims/redteam2_verify_novelty_tiles.py        # C5
 
 Alle Skripte laufen auf der CPU in unter einer Minute bis wenigen Minuten. Die Skripte der Linsen
 Machbarkeit und Alternativen (`feas*.py`, `lite_*.py`, `c1_value.py`, `n90_table.py`,
-`fixedn_vs_seq.py`, `run_ppr.py`) liegen nicht im Repository. Ihre Zahlen sind deshalb, soweit nicht
-gegenverifiziert, mit [N] markiert.
+`fixedn_vs_seq.py`, `run_ppr.py`, `p1_lin.py`) liegen mit dem Präfix `redteam2_lens_` in
+[`sims/`](sims/) (Korrektur: die erste Fassung sagte hier, sie lägen nicht im Repository; das
+widersprach dem Kopf des Berichts). Ihre Zahlen sind, soweit nicht gegenverifiziert, weiterhin mit [N]
+markiert, weil keine adversariale Zweitprüfung stattfand.

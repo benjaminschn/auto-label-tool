@@ -6,7 +6,12 @@ abgesicherter Labelqualität**.
 
 > Status: Forschungs-Prototyp (v0.1), Benchmark-Läufe stehen noch aus. Stand und Experimentplan:
 > [`docs/HANDOFF.md`](docs/HANDOFF.md). Implementierte Methode: [`docs/METHOD.md`](docs/METHOD.md).
-> **Forschungsstand und Nachfolger-Konzept „CertAL“:** [`docs/research/00_SYNTHESE.md`](docs/research/00_SYNTHESE.md).
+> **Konzept nach dem Red-Team:** CertAL-lite (klassische Abnahmeprüfung mit Korrektur) als
+> empfohlener Kern; Forschung am Labeler. Synthese v2:
+> [`docs/research/00_SYNTHESE.md`](docs/research/00_SYNTHESE.md), Red-Team-Bericht:
+> [`docs/research/07_red_team.md`](docs/research/07_red_team.md).
+> Hinweis: Die Sätze 3 und 5 unten beschreiben den Prototyp v0.1. Laut Synthese §3 gilt die
+> Recall-Garantie für U nicht, und die PPI-Intervalle sind nur approximativ.
 
 ## Die Idee in fünf Sätzen
 
@@ -19,13 +24,15 @@ abgesicherter Labelqualität**.
    sieht jeden Defekt auf hunderten echten Oberflächen und in abgeschwächter Form) und für
    *fold-konsistentes Self-Training*.
 3. **Übersehene Defekte werden kontrolliert**: die Detektionsschwelle kommt aus *Conformal Prediction*
-   – unter Austauschbarkeit gilt P(Defekt gefunden) ≥ 1−α, verteilungsfrei. Ist die Labelmenge zu klein
-   für eine Garantie, sagt das Tool das.
+   – angestrebt ist P(Defekt gefunden) ≥ 1−α unter Austauschbarkeit. Für die ungelabelten Bilder gilt das
+   in v0.1 nicht (Synthese §3). Ist die Labelmenge zu klein, sagt das Tool das.
 4. **Jedes Label bewertet sich selbst** (erwarteter Dice, Wahrscheinlichkeit eines übersehenen
    Defekts, Ensemble-Uneinigkeit, unerklärte Anomalie) → priorisierte Review-Liste.
 5. **Qualität wird gemessen, nicht behauptet**: ein kleines *zufälliges* Audit + die
-   Selbsteinschätzung aller Bilder ergeben mit *Prediction-Powered Inference* gültige
-   Konfidenzintervalle für Recall/Precision/Dice des gesamten Label-Pools.
+   Selbsteinschätzung aller Bilder ergeben mit *Prediction-Powered Inference* approximative
+   Konfidenzintervalle für Recall/Precision/Dice des gesamten Label-Pools (kein Zertifikat). Ein exaktes
+   ζ-Zertifikat unter registrierten Annahmen (uniformes Audit, fixes n, Protokoll P) liefert
+   `autolabel certify` (`autolabel/certify.py`).
 
 ## Schnellstart
 
@@ -54,8 +61,9 @@ Qualität messen: die Bilder aus `audit_sample.txt` von Hand labeln (z. B. 30 St
 autolabel estimate --run run1/ --audit-masks audit_masks/
 ```
 
-→ Punktschätzer und 90-%-Konfidenzintervalle für Pixel-Recall/-Precision, Defekt-Recall und
-mittleren Dice aller Auto-Labels (PPI), zum Vergleich auch das reine Audit-Intervall.
+→ Punktschätzer und approximative 90-%-Konfidenzintervalle (asymptotisch, bei seltenen Defekten
+unterdeckend) für Pixel-Recall/-Precision, Defekt-Recall und mittleren Dice aller Auto-Labels (PPI), zum
+Vergleich auch das reine Audit-Intervall.
 
 ## Benchmark reproduzieren
 

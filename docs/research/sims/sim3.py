@@ -1,3 +1,18 @@
+"""S2: upper confidence bound (UCB) for zeta = share of images with a missed defect.
+
+Columns: audit-only t (approximate), PPI lambda=1 (approximate, autolabel.ppi), exact hypergeometric
+(valid for a fixed n registered in advance and uniform SRS without replacement; not anytime-valid,
+07 F6) and PPI + WSR betting.
+
+v2 (07_red_team.md, F16 / change 6): the betting UCB returned the largest NON-rejected grid point, which
+is anti-conservative by up to one grid step (the true mean can lie between that point and the next one).
+It now returns the grid point ABOVE the largest non-rejected one (or the upper end of the range).
+Caveat (untested, not fixed here): the WSR bet treats the SRS-without-replacement audit as i.i.d.
+draws; strictly valid only for sampling with replacement or with a without-replacement martingale
+(Waudby-Smith & Ramdas 2020).
+
+Run:  python3 docs/research/sims/sim3.py      (~2.5 min on a CPU)
+"""
 import sys, numpy as np
 sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from sim_recall_cert import make_pool
@@ -24,8 +39,12 @@ def wsr_ucb_diff(Z, lo, hi, delta, grid):
     lamc = np.minimum(lam[None, :], 0.75 / np.maximum(1 - m, 1e-9))
     logK = np.cumsum(np.log1p(lamc * (m - x[None, :])), axis=1)  # bets that mean < m
     rej = (logK >= np.log(1 / delta)).any(1)
-    nr = grid[~rej]
-    return nr.max() if len(nr) else grid[0]
+    nr = np.where(~rej)[0]
+    if len(nr) == 0:          # every grid point rejected: probability <= delta if the mean is >= grid[0]
+        return grid[0]
+    j = nr.max()
+    # the true mean can lie anywhere in [grid[j], grid[j+1]) -> report the grid point above (07 F16)
+    return grid[j + 1] if j + 1 < len(grid) else hi
 
 rng = np.random.default_rng(3); N, delta, reps = 2000, 0.05, 300
 grid = np.linspace(-0.2, 1, 1201)
@@ -40,7 +59,8 @@ for prev in (0.03, 0.10, 0.30):
             zeta = y.mean(); tr.append(zeta)
             s = rng.choice(N, n, replace=False); rest = np.setdiff1d(np.arange(N), s)
             k = int(y[s].sum())
-            out["hyper"].append((hyper_ucb(k, n, N, delta) >= zeta, hyper_ucb(k, n, N, delta)))
+            uh = hyper_ucb(k, n, N, delta)
+            out["hyper"].append((uh >= zeta, uh))
             e, lo, hi = ppi.estimate_mean(y[s], f[s], f[rest], alpha=2 * delta)
             out["ppi_t"].append((hi >= zeta, hi))
             e, lo, hi = ppi.classical_mean(y[s], alpha=2 * delta, n_total=N)

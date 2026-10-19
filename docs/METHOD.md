@@ -7,9 +7,15 @@ klein bis groß, eine oder mehrere Klassen.
 > **Weiterentwicklung:** Die Recherche vom Oktober 2026 ([`research/00_SYNTHESE.md`](research/00_SYNTHESE.md))
 > hat Schwächen dieser Version aufgedeckt. Die wichtigste: **Die Recall-Garantie aus 3.5 gilt für die
 > ungelabelten Bilder so nicht** (Schwellentransfer OOF→Ensemble, in-sample Self-Training, abhängige
-> Komponenten). Außerdem unterdecken die Audit-Intervalle aus 3.7 bei seltenen Defekten. Der
-> Nachfolger heißt **CertAL**: Zertifikate kommen dort aus einem randomisierten, sequentiellen Audit
-> (Measure-and-Repair). Bis das umgesetzt ist, die Ausgaben von 3.5/3.7 als *approximativ* behandeln.
+> Komponenten). Außerdem unterdecken die Audit-Intervalle aus 3.7 bei seltenen Defekten. Nach dem
+> Red-Team-Bericht ([`research/07_red_team.md`](research/07_red_team.md)) ist der empfohlene Nachfolger
+> **CertAL-lite** ([`research/00_SYNTHESE.md`](research/00_SYNTHESE.md) v2 §4, 07 §6): Review in
+> Risikoreihenfolge, danach ein uniformes Audit ohne Zurücklegen aus dem ganzen Pool mit exakter Schranke
+> (Statistik-Kern in `autolabel/certify.py`, unit-getestet, noch nicht in die Labeling-Pipeline eingebunden). Die Audit-Intervalle aus
+> 3.7 sind nur *approximativ* (t-Quantil, Delta-Methode). Ein Zertifikat setzt voraus, dass jede Audit-Einheit nach
+> einem vorab registrierten Protokoll P geprüft wird (blinde Vollsuche, dann Overlay, Vereinigung) und dass das Audit
+> uniform mit exakter Schranke ausgewertet wird. Bis das umgesetzt ist, die Ausgaben von 3.5/3.7 als *approximativ*
+> behandeln.
 
 ## 1. Problemanalyse → Designprinzipien
 
@@ -20,8 +26,8 @@ klein bis groß, eine oder mehrere Klassen.
 | Starkes Klassenungleichgewicht | defektzentriertes Cropping, Dice+BCE, Schwellen auf Validierungsdaten statt 0.5 |
 | Reflexionen, Texturen, Staub als Fehlalarm-Quellen | Defekte auf *echte* ungelabelte Oberflächen synthetisieren → das Modell sieht tausende Varianten normaler Oberfläche |
 | Defektgrenze subjektiv | Toleranzmetriken, Ignore-Ringe um Pseudo-Labels |
-| Übersehene Defekte besonders kritisch | Schwellenwahl mit **verteilungsfreier Recall-Garantie** (Conformal Prediction), unabhängiger zweiter Detektor (Normalitätsmodell) für die Review |
-| Qualität muss messbar sein, kaum Ground Truth | (1) ehrliche Kreuzvalidierung auf L, (2) Selbsteinschätzung jedes Labels, (3) **PPI-Audit**: kleine zufällige Stichprobe + Selbsteinschätzung → gültige Konfidenzintervalle |
+| Übersehene Defekte besonders kritisch | Schwellenwahl mit konformer Recall-Schranke (Conformal Prediction; als Garantie nur auf L, für U gilt sie nicht, siehe Kopfkasten), unabhängiger zweiter Detektor (Normalitätsmodell) für die Review |
+| Qualität muss messbar sein, kaum Ground Truth | (1) ehrliche Kreuzvalidierung auf L, (2) Selbsteinschätzung jedes Labels, (3) **PPI-Audit**: kleine zufällige Stichprobe + Selbsteinschätzung → *approximative* Konfidenzintervalle (kein Zertifikat) |
 | Generische Vision-Modelle kennen die Domäne nicht | ImageNet-Features nur als Initialisierung bzw. als *Distanzmaß* (Normalitätsmodell), Entscheidungen werden aus L und U gelernt |
 
 ## 2. Überblick
@@ -126,9 +132,11 @@ Differenzschätzers für endliche Populationen geschätzt:
 
 `f_i` = Selbsteinschätzung (z. B. erwartete TP), `y_i` = wahre Größe im Audit. Der Audit-Term entfernt
 jede Verzerrung der Selbsteinschätzung, die Vorhersagen auf allen Bildern senken die Varianz. Für
-Verhältnis-Metriken (Recall, Precision) wird die Delta-Methode verwendet. Ergebnis: **gültige
-Konfidenzintervalle** für die Labelqualität des ganzen Pools – deutlich schmaler als ein Audit allein,
-wenn die Selbsteinschätzung gut ist, und nie ungültig, wenn sie schlecht ist.
+Verhältnis-Metriken (Recall, Precision) wird die Delta-Methode verwendet. Ergebnis: **approximative**
+Konfidenzintervalle für die Labelqualität des ganzen Pools (t-Quantil, Delta-Methode, SRS mit festem n),
+schmaler als ein Audit allein, wenn die Selbsteinschätzung gut ist. Sie haben keine Garantie für endliche
+Stichproben: Bei seltenen Defekten und schlechter Selbsteinschätzung unterdecken sie (07 F5: 0,884 statt
+0,95 bei n = 50). Für ein Zertifikat siehe `autolabel/certify.py`.
 
 ## 4. Praktischer Workflow
 
@@ -147,5 +155,5 @@ wenn die Selbsteinschätzung gut ist, und nie ungültig, wenn sie schlecht ist.
 * Die konforme Garantie ist marginal über Defekte; Defekte desselben Bildes sind abhängig.
 * Defekttypen, die in L gar nicht vorkommen, kann das überwachte Modell kaum finden – hier hilft nur
   das Normalitätsmodell als Review-Signal.
-* Die Qualität der Selbsteinschätzung beeinflusst nur die Breite der PPI-Intervalle, nicht ihre
-  Gültigkeit.
+* Die PPI-Intervalle sind approximativ. Eine schlechte Selbsteinschätzung macht sie nicht nur breiter,
+  sie kann bei kleinen Audits und seltenen Defekten auch die Abdeckung senken (07 F5).

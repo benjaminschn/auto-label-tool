@@ -9,7 +9,11 @@ python docs/research/sims/sim2.py              # IPW-CLT-Fieller mit PPS-Design
 python docs/research/sims/sim3.py              # S2: Fehlbildrate ζ (exakt hypergeometrisch, WSR-Betting)
 ```
 
-Prototypen, nicht Teil des Pakets; sie dienen als Ausgangspunkt für `autolabel/ppi.py` v2.
+Prototypen, nicht Teil des Pakets (Stand v2, 07 §7 Nr. 6: prädiktable Wettobergrenze, Laufzeitprüfung
+Z_t ≤ z^max, korrigierte Gitterkonvention, Floor-Prüfung über `autolabel.certify.check_floor`). Die
+exakte Schranke bei fixem n und die PPR-Konfidenzfolge sind in `autolabel/certify.py` umgesetzt; die
+IPW-Betting-Schranken für nicht-uniforme Designs gibt es nur hier. Ein verkleinerter adversarialer Test
+der Wettobergrenze läuft in `tests/test_sims_adversarial.py`.
 
 ## Red-Team-Prüfungen (Bericht 07)
 

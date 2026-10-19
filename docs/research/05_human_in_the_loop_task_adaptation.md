@@ -302,6 +302,18 @@ gleichzeitig für Qualität und Messung**. Die Qualität des *ausgelieferten* Po
 korrigiert) ergibt sich als Q̂ − Σ_R yᵢ + Σ_R yᵢ^korr mit gleichem Fehler. Die Untergrenze ε verhindert
 explodierende Gewichte für „sichere“ Bilder – genau dort verstecken sich übersehene Defekte.
 
+> **Nachtrag nach Red-Team ([07](07_red_team.md) §3.1, §3.2).** Die Formel oben setzt voraus, dass yᵢ in reviewten
+> Bildern *gemessen* ist. Das gilt nicht für ein Verify-first-Review, bei dem der Mensch das Overlay zuerst sieht und
+> nur bestätigt oder flaggt: Es misst s·y statt y (s = Sensitivität des Reviewers). Bei angenommenem s = 0,7 ergab das
+> in 07 0,135 (n = 400) bzw. 0,330 (n = 1000) Falschzertifikate bei nominal 0,05; der Fehler wächst mit n.
+> Verify-first dient deshalb nur der **Reparatur**, seine Korrekturen zählen nicht als Messung. Als Messung zählt
+> nur eine Prüfung nach einem vorab registrierten **Protokoll P** (blinde Vollsuche ohne Overlay, dann Overlay
+> einblenden, Vereinigung der Funde).
+> Daraus folgt für das Review-Stratum (Top-k bzw. π = 1): Es muss **im Auditrahmen liegen** (Audit nach dem Review aus
+> dem ganzen Pool, Review als eigenes Stratum) **oder unter P inspiziert** werden. Sonst fehlen die im Review
+> übersehenen Restfehler in jeder Schätzung. Im Beispiel von 07 §3.2 (N = 2000, Top-700-Review unter verify-first,
+> s = 0,7) war jedes ausgestellte Zertifikat falsch (Falschzertifikatsrate 0,55 = Zertifizierungsrate).
+
 **Zwei Fallstricke, die das Protokoll abfangen muss:**
 
 1. *Retraining auf Audit-Bildern.* Wird ein Audit-Bild in L aufgenommen, ist fᵢ für dieses Bild nicht mehr
@@ -528,6 +540,13 @@ deterministischen Top-k.
 *Experiment.* MT, BSData, KSDD2, MVTec AD 2 (öffentlicher Test); GT als simulierter Mensch; Kosten aus
 Abschn. 3.1; ε ∈ {0; 0,1; 0,3; 1}; 500 Wiederholungen des Samplings pro Lauf. *Falsifiziert*, wenn für
 ε ≥ 0,1 die Abdeckung < 88 % liegt oder H2 verfehlt wird.
+*Nachtrag nach Red-Team ([07](07_red_team.md) §3.1, §3.2, §5.2).* „Review = Audit“ gilt nur für Prüfungen nach
+Protokoll P. Ein Verify-first-Review darf nicht als Messung verwendet werden (siehe §4.2), und das Review-Stratum muss
+im Auditrahmen liegen oder unter P inspiziert werden (Gegenbeispiel mit Falschzertifikatsrate 0,55 in 07 §3.2). Das
+Experiment braucht deshalb zusätzlich einen simulierten fehlbaren Reviewer (s ∈ {1; 0,9; 0,7}). Außerdem ist das
+Prinzip bekannt (PAC-Labels, Rectifying Inspection nach Dodge–Romig), und für die Fehlbildrate ζ gewinnt die
+nicht-uniforme Allokation gegenüber „Top-k-Review + uniformes Audit“ laut 07 nur 0–3 %. Empfohlen ist dort
+CertAL-lite ([00](00_SYNTHESE.md) §4).
 
 ### Idee 2 – Ein-Bit-Feedback als Constraint-Training („Missed-Defect-MIL“)
 

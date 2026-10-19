@@ -598,11 +598,16 @@ Sensitivitätskarte**: In Bereichen mit Reflexen, starker Textur oder Sättigung
 synthetische Defekte schlecht, und dort wird es *auch echte* übersehen. Die Karte wird ein neues Merkmal
 für P(übersehener Defekt) und definiert **Strata für ein stratifiziertes PPI-Audit**: mehr Audit-Bilder
 dort, wo die Sensitivität niedrig ist, gewichtet nach Horvitz-Thompson. Die Gültigkeit kommt weiter aus
-dem Zufalls-Audit; die Synthetik senkt nur die Varianz und lenkt die Aufmerksamkeit.
+dem Zufalls-Audit; die Synthetik senkt nur die Varianz und lenkt die Aufmerksamkeit. **[Korr. 07 F5/F7]**
+Ein stratifiziertes PPI-Audit liefert nur approximative Intervalle. Gültig ist es erst mit einer
+designbasierten Schranke und unter den Bedingungen aus 07 §7 Nr. 7 (u. a. Floor q ≥ γ/N′, eingefrorene
+Strata und Schranken, Messung nach Protokoll P).
 
 **Warum neu.** Die gefundene Literatur nutzt Synthetik für Training, Modellwahl (SWSA) oder
 Conformal-Effizienz (SPI). Eine *bildspezifische* Recall-Abschätzung per Injection, die in eine PPI- bzw.
-Stratifizierungslogik eingeht, habe ich nicht gefunden.
+Stratifizierungslogik eingeht, habe ich nicht gefunden. **[Korr. 07 §4, C1]** Injection-Recovery selbst
+ist bekannt (Kepler DR25, Balrog, Fehler-Seeding); neu ist höchstens die Übertragung auf Pixel-Auto-Labels
+industrieller Defekte.
 
 **Falsifizierbares Experiment.** MT, KSDD2 und BSData, L = 15, 10 L-Ziehungen.
 (a) AUROC der Injection-Sensitivität, gemessen daran, ob ein Bild in U-GT einen übersehenen echten
@@ -625,14 +630,34 @@ RePaint-artig) ist es das Eingabebild. Das löst zugleich die unsichtbaren Posit
 Gain), das Unter- bzw. Überfüllen generierter Masken und die Unsicherheit am Rand, die über ignore
 behandelt wird.
 
-**Warum neu.** Die gefundenen Verfahren nehmen die Bedingung, segmentieren nachträglich mit einem
-*semantischen* Segmentierer (U-2-Net, Grounding-DINO) oder lernen die Maske mit. Eine radiometrisch
-definierte Differenzmaske mit Ignore-Band als Labelvertrag habe ich nicht gesehen.
+**Was daran neu ist (korrigiert nach Red-Team, [07](07_red_team.md) §4, C6).** Die erste Fassung sagte, eine
+radiometrisch definierte Differenzmaske als Labelvertrag sei „nicht gesehen“. Das ist falsch.
+Signalbasierte Labels sind bekannt:
 
-**Falsifizierbares Experiment.** Gleiche Synthese (Residual-Paste, später Diffusion), drei
-Labelvarianten: Quellmaske, Differenzmaske, Differenzmaske + ignore. Bewertet werden Boundary-F1,
-Toleranz-F1, Pixel-AP und FP/Bild auf T für KSDD2, MT und DeepCrack, außerdem die OOF-ECE.
-**Verworfen**, wenn Boundary-F1 um < 1 pp steigt und FP/Bild nicht sinkt, über 5 Ziehungen gepaart.
+* NSA (Schlüter, Tan, Hou, Kainz, ECCV 2022) setzt das Label als geschwellte Intensitätsdifferenz zwischen
+  Ergebnis und Hintergrund, auch im Modus „binary“. Das hat 07 im Code (`self_sup_tasks.py`) geprüft.
+* FPI/PII (Tan et al., arXiv:2011.04197; MICCAI 2021) leiten das Label aus dem Syntheseschritt selbst ab
+  (Interpolationsfaktor bzw. erzeugte Veränderung), nicht aus einer Quellmaske. Laut 07 nächste Vorarbeit; Details
+  nicht am Volltext geprüft.
+
+Die übrigen gefundenen Verfahren nehmen die Bedingung, segmentieren nachträglich mit einem *semantischen*
+Segmentierer (U-2-Net, Grounding-DINO) oder lernen die Maske mit. Unser Beitrag ist enger: die
+**Verallgemeinerung** dieses Prinzips auf alle Generatoren (Residual-Paste, hintergrundtreue Diffusion), ergänzt um
+das **Ignore-Band** und die **Verwerfungsregel** für Energie außerhalb von dilate(M_cond).
+
+**Falsifizierbares Experiment.** Gleiche Synthese (Residual-Paste, später Diffusion), vier
+Labelvarianten:
+
+* Quellmaske;
+* **NSA-Arm**: geschwellte Intensitätsdifferenz wie in NSA, ohne Ignore-Band und ohne Verwerfungsregel
+  (nach 07 C6 ergänzt, damit der Beitrag gegen die bekannte Vorarbeit gemessen wird);
+* Differenzmaske mit lokaler Normierung (κ·σ_lok) und Verwerfungsregel;
+* Differenzmaske + ignore.
+
+Bewertet werden Boundary-F1, Toleranz-F1, Pixel-AP und FP/Bild auf T für KSDD2, MT und DeepCrack, außerdem die
+OOF-ECE. **Verworfen**, wenn Boundary-F1 um < 1 pp steigt und FP/Bild nicht sinkt, über 5 Ziehungen gepaart. Der
+Vergleich, der über den eigenen Beitrag entscheidet, ist „Differenzmaske + ignore“ gegen den NSA-Arm. Der Vergleich
+mit der Quellmaske zeigt nur, ob signalbasierte Labels überhaupt helfen.
 
 ### N3 – Detektierbarkeitsabgestimmte Synthese
 
@@ -673,6 +698,10 @@ kontextgebundenen MVTec-Objektklassen (z. B. screw, metal_nut), VisA.
 Defekt: Residuum mit Gain 0, aber gleichem Resampling, gleicher Weichmaske und gleichem Clipping;
 Poisson-Klon eines *normalen* Patches; Diffusions-Inpainting mit Normal-Prompt bzw. Normal-LoRA. Diese
 Bilder werden als **negativ** gelabelt. Das Modell kann sich so nicht auf Spuren der Synthese stützen.
+
+**Vorarbeit (nach Red-Team, [07](07_red_team.md) C6).** Negative mit denselben Einfügeartefakten sind aus der
+Copy-Paste-Synthese für Detektion bekannt (Dwibedi et al., ICCV 2017; Dvornik et al., arXiv:1809.02492). Neu ist
+höchstens die systematische Null-Variante für jede Syntheseoperation.
 
 **Falsifizierbares Experiment.** Mit bzw. ohne Null-Negative (Anteil 10–20 % der synthetischen
 Samples). Gemessen werden FP/Bild auf null-bearbeiteten Normalbildern (sollte → 0), FP/Bild auf

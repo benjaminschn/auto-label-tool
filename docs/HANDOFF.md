@@ -5,10 +5,25 @@ Begründungen der Methode stehen in [`METHOD.md`](METHOD.md), Nutzung im [`READM
 
 > **Nachtrag Forschung (18.10.2026, abends):** Fünf Literaturberichte, ein Theoriebeitrag und eine
 > Synthese liegen in [`research/`](research/). **Zuerst [`research/00_SYNTHESE.md`](research/00_SYNTHESE.md)
-> lesen.** Dort stehen das Nachfolger-Konzept „CertAL“, eine Liste der Schwächen des aktuellen Codes
+> lesen.** Dort standen in v1 das Nachfolger-Konzept „CertAL“ (durch den Nachtrag vom 19.10. überholt: Kern ist jetzt
+> CertAL-lite), eine Liste der Schwächen des aktuellen Codes
 > (§3, u. a. gilt die Recall-Garantie für U nicht) und eine überarbeitete Roadmap (§6). Diese ersetzt
 > die Prioritäten in Abschnitt 4/7 dieses Dokuments, soweit sie sich widersprechen. Die
 > Baseline-Läufe aus Abschnitt 4 bleiben als Referenz sinnvoll (Roadmap-Phase 1).
+
+> **Nachtrag 19.10.2026 (Red-Team):** Der Red-Team-Bericht [`research/07_red_team.md`](research/07_red_team.md) hat
+> CertAL geprüft. Ergebnis: Das volle CertAL ist überdimensioniert, und mehrere Gültigkeitsaussagen galten nur unter
+> unausgesprochenen Annahmen (Mensch = Gold, Review-Stratum außerhalb des Audits, nachgelernte Rangfolge, D_max,
+> überwachte Fixe-n-Schranke). Empfohlener Kern ist **CertAL-lite**: klassische Akzeptanzprüfung mit Rectifying
+> (Review in Risikoreihenfolge, danach uniformes Audit ohne Zurücklegen aus dem ganzen Pool unter Protokoll P,
+> exakte Schranke bei festem n), siehe [`research/00_SYNTHESE.md`](research/00_SYNTHESE.md) v2 §4 und 07 §6.
+> Reihenfolge (wie 00 §6): Zuerst laufen die Baseline-Läufe aus Phase 1 (Abschnitt 4 dieses Dokuments); keine
+> weitere CertAL-Komponente vor Abschluss von Phase 1. Ausgenommen ist nur `autolabel/certify.py`, der bereits
+> vorhandene Statistik-Kern von CertAL-lite (Phase 0). Er ist teilweise implementiert und unit-getestet
+> (`tests/test_certify.py`), aber noch nicht in die Labeling-Pipeline eingebunden und nicht auf echten Daten
+> erprobt; φ-Zertifikat, R als eigenes Stratum und mehrere adversariale Sims fehlen noch (00 §4.7). Diese
+> offenen Teile werden neben Phase 1 ergänzt, nicht vor ihr. [`research/04_guarantees_measurement.md`](research/04_guarantees_measurement.md)
+> enthält am Anfang eine Korrekturliste.
 
 ---
 

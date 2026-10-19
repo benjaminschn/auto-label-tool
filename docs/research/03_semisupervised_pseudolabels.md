@@ -57,8 +57,13 @@ Stand: 18.10.2026 · Literatur-Review für `auto-label-tool` · Bezug: [`METHOD.
 8. **Für die label-freie Qualitätsschätzung ist auf Bildebene der paarweise Dice zwischen
    Ensemble-Membern der robusteste Schätzer** (Zenk et al., MedIA 2025, über fünf bzw. sechs
    Datensätze). Auf Komponentenebene sagen MetaSeg-artige Meta-Klassifikatoren False Positives mit
-   AUROC ≈ 88–92 % voraus **[Abstract/Snippet]**. **Übersehene Defekte (FN) adressiert keine der
-   etablierten Methoden direkt.** Genau hier liegt die Forschungslücke (Ideen N2 und N3).
+   AUROC ≈ 88–92 % voraus **[Abstract/Snippet]**. **Für übersehene Defekte (FN) in Pixel-Auto-Labels fehlt eine
+   etablierte Methode.** In anderen Feldern gibt es direkte Verfahren: Software-Test (Fehler-Seeding), NDE
+   (Probability of Detection, POD), Astronomie (Injection-Recovery), Daten-Cleaning (DQM) und Technology-Assisted
+   Review (TAR). Für fehlende Labels in der Segmentierung gibt es außerdem Labelfehlerdetektoren (Rottmann & Reese,
+   WACV 2023; Penquitt et al., arXiv:2609.21822). Die Forschungslücke ist also die Übertragung auf Pixel-Auto-Labels
+   industrieller Defekte (Ideen N2 und N3), nicht das Problem an sich. *(Korrigiert nach Red-Team,
+   [07](07_red_team.md) Nr. 14 und M9; die erste Fassung sagte „adressiert keine der etablierten Methoden direkt“.)*
 9. **Top-3-Empfehlung.** (1) Heterogenes Ensemble mit DINOv3-Encoder. (2) Neues Trainingsrezept für
    das Produktionsmodell (Soft-Targets, DML, blob- und Skeleton-Recall-Terme). (3) Komponentenweiser
    Qualitäts-Meta-Klassifikator plus paarweiser Dice, kalibriert auf OOF und geprüft per PPI.
@@ -427,8 +432,13 @@ Detektoren*, um übersehene Defekte zu finden, wo Unabhängigkeit wichtiger ist 
 - *FP-Komponenten*: MetaSeg-artige Merkmale, also Größe, mittlere und maximale Wahrscheinlichkeit,
   Entropie, Member-Stimmenanteil und Randgradient. Bei uns kommen Anomaliescore und
   Copy-Paste-Ähnlichkeit hinzu.
-- *Übersehene Defekte*: Hierfür gibt es **keine etablierte Methode**. Alle genannten Schätzer bewerten
-  *vorhandene* Vorhersagen. Ein FN hat definitionsgemäß keine Komponente. Brauchbare Signale sind
+- *Übersehene Defekte*: Für Pixel-Auto-Labels gibt es hierfür **keine etablierte Methode**. In anderen Feldern
+  existieren direkte Verfahren: Fehler-Seeding im Software-Test (Mills), POD-Studien in der zerstörungsfreien
+  Prüfung (MIL-HDBK-1823A), Injection-Recovery in der Astronomie (z. B. Kepler DR25), DQM im Daten-Cleaning
+  (Chung, Krishnan, Kraska, PVLDB 2017) und Stoppregeln mit Recall-Zertifikat in TAR. Für fehlende Labels in der
+  Segmentierung gibt es Labelfehlerdetektoren (Rottmann & Reese, WACV 2023; Penquitt et al., arXiv:2609.21822).
+  *(Korrigiert nach [07](07_red_team.md) Nr. 14, M9; Angaben aus 07 §4, hier nicht erneut geprüft.)* Die übrigen
+  genannten Schätzer bewerten *vorhandene* Vorhersagen. Ein FN hat dort definitionsgemäß keine Komponente. Brauchbare Signale sind
   (a) unabhängige Detektoren wie Normalitätsmodell oder Few-Shot-FM (Abschnitt 2.3), (b)
   „Near-Miss“-Komponenten zwischen konformer und Hysterese-Schwelle, (c) Member, die als einzige
   feuern, und (d) synthetische Injektion mit bekannter Wahrheit (Idee N2).
@@ -536,10 +546,16 @@ Audit-Set.
 Normalitätsmodell bzw. Few-Shot-FM, R8) „fangen“ Defekte. Aus der Überlappung folgt eine
 Lincoln-Petersen-Schätzung bzw. bei Abhängigkeit eine Chapman- oder log-lineare Schätzung der
 Gesamtzahl. Die Abhängigkeit wird auf den injizierten Defekten gemessen, deren Wahrheit bekannt ist.
-Beide Schätzer werden mit dem PPI-Audit kombiniert, das als Rektifizierer dient.
+Beide Schätzer werden mit dem PPI-Audit kombiniert, das als Rektifizierer dient. **[Korr. 07 F5]** Das
+PPI-Audit liefert nur approximative Intervalle; ein Rektifizierer mit Garantie ist erst ein designbasiertes
+Audit mit exakter Schranke (CertAL-lite, 00 §4).
 **Warum neu.** Etablierte Qualitätsschätzer (Abschnitt 2.6) bewerten nur vorhandene Komponenten.
 Capture–Recapture ist in der Ökologie und Epidemiologie Standard, für Pixel-Auto-Labeling ist es
-unseres Wissens nicht beschrieben (nicht erschöpfend geprüft).
+unseres Wissens nicht beschrieben (nicht erschöpfend geprüft). **[Korr. 07 §4, C1]** Nur teilweise neu:
+Kansal 2026 wendet Capture–Recapture über Labelfehlerdetektoren an (MAE schlechter als die Rohzählung),
+Rottmann & Reese (WACV 2023) suchen fehlende Labels in Segmentierungen, Injection-Recovery ist in
+Astronomie und Software-Test etabliert. Haltbar ist nur die Übertragung auf Pixel-Auto-Labels
+industrieller Defekte, gekoppelt an ein designbasiertes Audit.
 **Experiment.** Auf allen Benchmarks mit vollständiger U-GT werden wahrer Komponenten-Recall und die
 Schätzungen (i), (ii), (i+ii+PPI) verglichen, außerdem die Breite des PPI-Intervalls mit und ohne diese
 Prädiktoren bei n_audit = 10/20/40.
