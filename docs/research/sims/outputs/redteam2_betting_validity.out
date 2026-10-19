@@ -1,0 +1,21 @@
+(1) adversarial pool: true recall 0.800; q at floor for the 40 missed defects
+    n=  300, H(r=0.80) true: false rejection with per-draw cap 0.628 | with predictable cap 0.000   (nominal <= 0.05)
+    n=  300, H(r=0.82) true: false rejection with per-draw cap 0.506 | with predictable cap 0.000   (nominal <= 0.05)
+    n= 1000, H(r=0.80) true: false rejection with per-draw cap 0.989 | with predictable cap 0.000   (nominal <= 0.05)
+    n= 1000, H(r=0.82) true: false rejection with per-draw cap 0.969 | with predictable cap 0.000   (nominal <= 0.05)
+(2) D_max violated by one unit: true recall 0.792; target 'rho >= 0.80' is FALSE
+    n=1500 WR draws: certificate 'rho >= 0.80' issued in 0.707 of runs (nominal <= 0.05); heavy unit never drawn in 0.447; false certs among runs that never drew it 1.000
+    n=3000 WR draws: certificate 'rho >= 0.80' issued in 0.737 of runs (nominal <= 0.05); heavy unit never drawn in 0.250; false certs among runs that never drew it 1.000
+(3) PPR anytime WOR bound, monitored every 5 draws up to 800, true zeta 0.0205 (certificate false): certifies zeta <= 0.02 in 0.031 (median stop n=300)
+(3) PPR anytime WOR bound, monitored every 5 draws up to 800, true zeta 0.005: certifies zeta <= 0.02 in 0.995 (median stop n=300)
+(4) haystack, k=10 misses, worst case packed into ceil(k/D_max)=10 units (D_max=1): required inspected share of the no-signal stratum = 0.259
+(4) haystack, k=10 misses, worst case packed into ceil(k/D_max)=5 units (D_max=2): required inspected share of the no-signal stratum = 0.451
+(4) haystack, k=10 misses, worst case packed into ceil(k/D_max)=2 units (D_max=6): required inspected share of the no-signal stratum = 0.776
+(5) 04 S4: N=2000, n=30, 0 bad found -> exact 95% UCB of #bad = 188
+(5) 04 S4: N=2000, n=100, 0 bad found -> exact 95% UCB of #bad = 57
+(5) 04 S4: N=2000, n=300, 0 bad found -> exact 95% UCB of #bad = 18
+(5) 04 §0.8: smallest n with exact UCB <= 7 (0 found) = 624; binomial formula N ln(1/delta)/8 = 749
+
+real	0m31.729s
+user	0m31.333s
+sys	0m0.528s

@@ -1,0 +1,12 @@
+spread, p_miss=0.1: rho=0.880 rho_img=0.884 rho_b=0.812; D_max image=5 tile=3
+   area 10%: gap true-LCB  pooled/images 0.537 | pooled/tiles 0.376 | image-weighted/images 0.306 | defective-image/images 0.338   (LCBs 0.343 0.505 0.579 0.473)
+   area 30%: gap true-LCB  pooled/images 0.278 | pooled/tiles 0.181 | image-weighted/images 0.149 | defective-image/images 0.187   (LCBs 0.603 0.699 0.736 0.625)
+spread, p_miss=0.25: rho=0.727 rho_img=0.726 rho_b=0.640; D_max image=4 tile=2
+   area 10%: gap true-LCB  pooled/images 0.452 | pooled/tiles 0.293 | image-weighted/images 0.320 | defective-image/images 0.324   (LCBs 0.275 0.435 0.406 0.317)
+   area 30%: gap true-LCB  pooled/images 0.237 | pooled/tiles 0.151 | image-weighted/images 0.171 | defective-image/images 0.183   (LCBs 0.490 0.576 0.555 0.457)
+clustered, p_miss=0.1: rho=0.898 rho_img=0.895 rho_b=0.854; D_max image=4 tile=3
+   area 10%: gap true-LCB  pooled/images 0.546 | pooled/tiles 0.391 | image-weighted/images 0.308 | defective-image/images 0.317   (LCBs 0.352 0.506 0.587 0.536)
+   area 30%: gap true-LCB  pooled/images 0.287 | pooled/tiles 0.171 | image-weighted/images 0.149 | defective-image/images 0.168   (LCBs 0.611 0.727 0.746 0.685)
+clustered, p_miss=0.25: rho=0.754 rho_img=0.744 rho_b=0.653; D_max image=5 tile=3
+   area 10%: gap true-LCB  pooled/images 0.430 | pooled/tiles 0.318 | image-weighted/images 0.285 | defective-image/images 0.302   (LCBs 0.324 0.436 0.460 0.351)
+   area 30%: gap true-LCB  pooled/images 0.223 | pooled/tiles 0.150 | image-weighted/images 0.165 | defective-image/images 0.181   (LCBs 0.531 0.605 0.579 0.473)

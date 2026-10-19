@@ -17,3 +17,8 @@ Prototypen, nicht Teil des Pakets; sie dienen als Ausgangspunkt für `autolabel/
 python docs/research/sims/redteam_capture_recapture.py   # 06: Transporttest, HT/Huggins/Hybrid unter Annahmeverletzungen (~10 s)
 python docs/research/sims/redteam_audit_checks.py        # 04: Prop. 3, Optional Stopping, Kacheln, Satz 2, Mensch ≠ Gold (~1–2 min)
 ```
+
+Durchgang 2 (Bericht 07): `redteam2_*.py` (Erstprüfer), `redteam2_verify_*.py` (Gegenprüfer),
+`redteam2_lens_*.py` (Machbarkeits- und Alternativenlinse). Gespeicherte Ausgaben in `outputs/`.
+Alle Skripte laufen aus dem Repo-Root mit `python3 docs/research/sims/<datei>.py` in Sekunden bis
+wenigen Minuten auf der CPU.

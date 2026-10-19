@@ -1,0 +1,2 @@
+(3) PPR anytime WOR bound, monitored every 5 draws up to 800, true zeta 0.0205 (certificate false): certifies zeta <= 0.02 in 0.023 (median stop n=300)
+(3) PPR anytime WOR bound, monitored every 5 draws up to 800, true zeta 0.005: certifies zeta <= 0.02 in 0.990 (median stop n=300)
