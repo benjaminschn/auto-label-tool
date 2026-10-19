@@ -25,6 +25,15 @@ Begründungen der Methode stehen in [`METHOD.md`](METHOD.md), Nutzung im [`READM
 > offenen Teile werden neben Phase 1 ergänzt, nicht vor ihr. [`research/04_guarantees_measurement.md`](research/04_guarantees_measurement.md)
 > enthält am Anfang eine Korrekturliste.
 
+> **Nachtrag 19.10.2026, abends (Phase 1, lokal auf dem M4):** Setup und Validierung (§3) sind erledigt.
+> 43 Tests sind grün; alle früher ungetesteten Teile aus §2 (CLI `run`/`estimate`/`certify*`,
+> `reevaluate`, `summarize`, `eval_types`, `run_oracle`, MPS) liefen einmal end-to-end. Behoben wurden
+> MPS-Performance (`channels_last`) und MPS-Speicher (kNN-Blöcke), leere Tabellen in `summarize`
+> sowie die unsichtbaren Positiven der Synthese. Neu sind die Phase-1-Auswertung (ζ, φ,
+> Größenklassen, K′(k), Kosten(k), G1/G2) und ein KSDD2-Loader. **Ergebnisse, Gate-Entscheidungen und
+> Laufzeiten: [`RESULTS.md`](RESULTS.md).** Der Experimentplan in §4 ist für A und B (alle 4 Datensätze,
+> 3 Seeds) abgearbeitet; C–E (Label-Budget, weitere Ablationen, Oracle) fehlen noch.
+
 ---
 
 ## 1. Ziel (Kurzfassung der Aufgabe)
