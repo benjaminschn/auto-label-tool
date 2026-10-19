@@ -154,8 +154,10 @@ def cmd_estimate(a):
         ec, loc, hic = ppi.classical_ratio(num, den, a.alpha, len(ids))
         out[name] = {"ppi": [e, max(0, lo), min(1, hi)], "audit_only": [ec, max(0, loc), min(1, hic)]}
     e, lo, hi = ppi.estimate_mean(T("dice_tol"), F("exp_dice", audited), F("exp_dice", rest), a.alpha)
-    out["mean_dice_tol"] = {"ppi": [e, max(0, lo), min(1, hi)],
-                            "audit_only": list(ppi.classical_mean(T("dice_tol"), a.alpha, len(ids)))}
+    ec, loc, hic = ppi.classical_mean(T("dice_tol"), a.alpha, len(ids))
+    out["mean_dice_tol"] = {"ppi": [e, max(0, lo), min(1, hi)], "audit_only": [ec, max(0, loc), min(1, hic)]}
+    out["note"] = ("approximate (CLT-based) intervals, not a certificate; for an exact zeta certificate use "
+                   "`autolabel certify-plan` / `autolabel certify` (CertAL-lite)")
     print(json.dumps(out, indent=1))
     with open(os.path.join(a.run, "quality_estimate.json"), "w") as fh:
         json.dump(out, fh, indent=1)
