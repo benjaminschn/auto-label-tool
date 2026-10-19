@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .model import normalize
+from .model import memory_format, normalize
 
 
 def _pad32(x: torch.Tensor, m: int = 32):
@@ -30,7 +30,7 @@ def predict_image(model, img: np.ndarray, tta: str = "hflip") -> np.ndarray:
         xs.append(torch.flip(x, [3]))
     if tta == "flips":
         xs.append(torch.flip(x, [2]))
-    batch = normalize(torch.cat(xs)).contiguous(memory_format=torch.channels_last)
+    batch = normalize(torch.cat(xs)).contiguous(memory_format=memory_format(dev))
     p = torch.sigmoid(model(batch))[:, 0]
     outs = [p[0]]
     if len(xs) > 1:

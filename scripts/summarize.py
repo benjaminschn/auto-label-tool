@@ -39,12 +39,29 @@ def ms(vals, pct=True, digits=1):
 
 
 def get(d, path):
-    for p in path.split("."):
-        if isinstance(d, list):
-            p = int(p)
-        elif p not in d:
+    """Nested lookup with "." as separator; keys may themselves contain dots (e.g. "alpha=0.1",
+    "risk/0.05"), so at each level the longest matching key wins."""
+    parts = path.split(".")
+    i = 0
+    while i < len(parts):
+        if d is None:
             return None
-        d = d[p]
+        if isinstance(d, list):
+            try:
+                d = d[int(parts[i])]
+            except (ValueError, IndexError):
+                return None
+            i += 1
+            continue
+        if not isinstance(d, dict):
+            return None
+        for j in range(len(parts), i, -1):
+            k = ".".join(parts[i:j])
+            if k in d:
+                d, i = d[k], j
+                break
+        else:
+            return None
     return d
 
 
@@ -147,7 +164,7 @@ def review_table(runs, keys, fracs=("0.00", "0.05", "0.10", "0.20", "0.30")):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runs", default="/home/user/runs/*")
+    ap.add_argument("--runs", default="runs/*")
     a = ap.parse_args()
     runs = load(a.runs)
     for key, reps in sorted(runs.items()):

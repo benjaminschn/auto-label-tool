@@ -38,6 +38,11 @@ def get_device() -> torch.device:
     return torch.device("cpu")
 
 
+def memory_format(dev: torch.device) -> torch.memory_format:
+    """channels_last helps on CUDA/CPU but is ~4x slower than contiguous on Apple MPS (measured, torch 2.14)."""
+    return torch.contiguous_format if dev.type == "mps" else torch.channels_last
+
+
 def set_threads(n: int):
     """n > 0 limits torch CPU threads; 0 keeps torch's default (all cores)."""
     if n and n > 0:

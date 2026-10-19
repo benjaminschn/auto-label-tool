@@ -185,3 +185,13 @@ def test_normality_knn_excludes_own_image():
         dist[:, m.bank_ids == i] = float("inf")
         ref = torch.topk(dist, 3, dim=1, largest=False).values[:, -1].clamp(min=0).sqrt()
         assert torch.allclose(m.knn_distance(q, i), ref, atol=1e-5)
+
+
+def test_summarize_get_keys_with_dots():
+    from scripts.summarize import get
+    d = {"conformal": {"alpha=0.1": {"t": 0.3}}, "review": {"risk/0.05": {"defect_recall": 0.9}},
+         "rounds": [{"U": {"tol_f1": 0.5}}]}
+    assert get(d, "conformal.alpha=0.1.t") == 0.3
+    assert get(d, "review.risk/0.05.defect_recall") == 0.9
+    assert get(d, "rounds.0.U.tol_f1") == 0.5
+    assert get(d, "rounds.3.U") is None and get(d, "nope.x") is None

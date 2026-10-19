@@ -9,3 +9,5 @@ runs/
 *.pkl
 *.pkl.gz
 .ipynb_checkpoints/
+.venv/
+*.egg-info/

@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 
 from . import augment as A
-from .model import UNet, get_device, normalize, set_threads
+from .model import UNet, get_device, memory_format, normalize, set_threads
 
 
 @dataclass
@@ -156,7 +156,8 @@ def train_member(data: TrainData, cfg: TrainConfig, log: Optional[Callable[[str]
     dev = get_device()
     rng = np.random.RandomState(cfg.seed)
     gen = SampleGenerator(data, cfg, rng)
-    model = build_model(cfg).to(dev, memory_format=torch.channels_last)
+    mf = memory_format(dev)
+    model = build_model(cfg).to(dev, memory_format=mf)
     enc_params = list(model.encoder.parameters())
     enc_ids = {id(p) for p in enc_params}
     dec_params = [p for p in model.parameters() if id(p) not in enc_ids]
@@ -173,7 +174,7 @@ def train_member(data: TrainData, cfg: TrainConfig, log: Optional[Callable[[str]
         for g, b in zip(opt.param_groups, base):
             g["lr"] = b * f
         x, t, w = (v.to(dev) for v in gen.batch(cfg.batch))
-        x = normalize(x).contiguous(memory_format=torch.channels_last)
+        x = normalize(x).contiguous(memory_format=mf)
         loss = seg_loss(model(x), t, w, cfg.dice_weight)
         opt.zero_grad(set_to_none=True)
         loss.backward()
