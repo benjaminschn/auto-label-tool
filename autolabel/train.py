@@ -102,12 +102,15 @@ class SampleGenerator:
         canvas = img.astype(np.float32).copy()
         tgt = pos.copy()
         w = w.copy()
+        ign = np.zeros_like(tgt)
         for _ in range(rng.randint(1, c.max_paste + 1)):
             if self.bank and rng.rand() >= c.p_procedural:
-                m = A.paste_defect(rng, canvas, tgt, self.bank[rng.randint(len(self.bank))])
+                m = A.paste_defect(rng, canvas, tgt, self.bank[rng.randint(len(self.bank))], ignore=ign)
             else:
-                m = A.procedural_defect(rng, canvas, tgt, self.contrasts)
-            w[m] = 1.0  # pasted defect is certain even if the teacher was unsure there
+                m = A.procedural_defect(rng, canvas, tgt, self.contrasts, ignore=ign)
+            w[m] = 1.0  # visibly pasted defect is certain even if the teacher was unsure there
+        # invisible parts of pasted defects and their changed rim: neither positive nor negative
+        w[ign & ~tgt] = 0.0
         return canvas, tgt, w
 
     def _pseudo(self):

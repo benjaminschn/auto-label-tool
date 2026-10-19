@@ -11,6 +11,13 @@ handful of labeled images:
   mask after matching the mean intensity.
 * procedural defects (optional) - thin Bezier "scratches" and small blobs whose contrast distribution is
   matched to the labeled defects.
+
+Label contract (02 N2 / 07 C6): the label of a synthetic defect comes from the signal that was
+*actually produced* (canvas after pasting and clipping minus canvas before), not from the source mask.
+Source-mask pixels whose realised change is below a visibility threshold (clipping at 0/255, small gain,
+faint residual) become *ignore*, never positive; a pasted component without enough visible pixels is
+ignored entirely. A band around the source mask that changed noticeably is ignore as well. See
+:func:`realised_label`.
 """
 from __future__ import annotations
 
@@ -100,9 +107,76 @@ def _scale(arrs, s):
     return out
 
 
+def local_noise_sigma(gray: np.ndarray) -> float:
+    """Robust noise level of a (background) gray patch: MAD of a high-pass residual."""
+    g = gray.astype(np.float32)
+    if g.size < 9:
+        return 1.0
+    hp = g - cv2.GaussianBlur(g, (0, 0), 1.5)
+    return float(1.4826 * np.median(np.abs(hp - np.median(hp))))
+
+
+@dataclass
+class VisibilityRule:
+    """When does a pasted pixel count as a visible (positive) defect pixel?
+
+    |delta| >= max(kappa * sigma_local, min_abs) with delta the realised change in gray level. kappa = 1
+    keeps faint but real-looking defects as positives (02 QC 2); min_abs guards flat backgrounds.
+    A pasted component needs at least ``min_visible_px`` visible pixels (or ``min_visible_frac`` of its
+    area, whichever is smaller) to be positive at all; otherwise it is ignore.
+    """
+    kappa: float = 1.0
+    min_abs: float = 2.0
+    min_visible_px: int = 3
+    min_visible_frac: float = 0.2
+    band: int = 3              # band around the source mask that may change (soft paste edges)
+
+
+def realised_label(before: np.ndarray, after: np.ndarray, src_mask: np.ndarray,
+                   rule: Optional[VisibilityRule] = None) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Positive and ignore masks of a synthetic defect from the realised change.
+
+    before / after: HxWx3 (or HxW) float canvases around the paste location, ``after`` already clipped.
+    src_mask: the pasted source mask (bool HxW). Returns (positive, ignore, threshold):
+      * positive  = visible pixels of src_mask components that are visible enough as a whole;
+      * ignore    = src_mask minus positive, plus the band around src_mask that changed by >= threshold/2.
+    Pixels outside both stay whatever the caller had (normally negative).
+    """
+    rule = rule or VisibilityRule()
+    m = src_mask.astype(bool)
+    b = before.astype(np.float32)
+    a = after.astype(np.float32)
+    if b.ndim == 3:
+        delta = np.abs(a - b).max(-1)       # a change in any channel is visible
+        gray_bg = b.mean(-1)
+    else:
+        delta, gray_bg = np.abs(a - b), b
+    band = _grow(m, rule.band) if rule.band > 0 else m
+    sigma = local_noise_sigma(gray_bg[~band]) if (~band).any() else local_noise_sigma(gray_bg)
+    thr = max(rule.kappa * sigma, rule.min_abs)
+    vis = (delta >= thr) & m
+    pos = np.zeros_like(m)
+    if vis.any():
+        lab, n = ndi.label(m, structure=np.ones((3, 3)))
+        idx = np.arange(1, n + 1)
+        area = np.asarray(ndi.sum(np.ones_like(delta), lab, idx))
+        nvis = np.asarray(ndi.sum(vis.astype(np.float32), lab, idx))
+        need = np.minimum(rule.min_visible_px, np.maximum(1.0, np.ceil(rule.min_visible_frac * area)))
+        ok = np.concatenate([[False], nvis >= need])
+        pos = vis & ok[lab]
+    ign = (m & ~pos) | (band & ~m & (delta >= 0.5 * thr))
+    return pos, ign, thr
+
+
 def paste_defect(rng, canvas: np.ndarray, target: np.ndarray, patch: DefectPatch,
-                 gain_range=(0.6, 1.3), scale_range=(0.75, 1.3), center: Optional[Tuple[int, int]] = None):
-    """Paste one defect into ``canvas`` (float32 HxWx3, modified in place); returns the pasted mask."""
+                 gain_range=(0.6, 1.3), scale_range=(0.75, 1.3), center: Optional[Tuple[int, int]] = None,
+                 ignore: Optional[np.ndarray] = None, rule: Optional[VisibilityRule] = None):
+    """Paste one defect into ``canvas`` (float32 HxWx3, modified in place).
+
+    The label follows the realised change (:func:`realised_label`): visible pixels are OR-ed into
+    ``target``; invisible source pixels and the changed band go to ``ignore`` (if given) and are removed
+    from ``target`` where they were not positive before. Returns the realised positive mask (full size).
+    """
     rgb, res, m = _rand_geom(rng, [patch.rgb, patch.residual, patch.mask])
     s = rng.uniform(*scale_range)
     rgb, res, m = _scale([rgb, res, m], s)
@@ -118,6 +192,10 @@ def paste_defect(rng, canvas: np.ndarray, target: np.ndarray, patch: DefectPatch
     else:
         y0 = int(np.clip(center[0] - h // 2, 0, H - h))
         x0 = int(np.clip(center[1] - w // 2, 0, W - w))
+    rule = rule or VisibilityRule()
+    pad = rule.band + 1
+    wy0, wy1, wx0, wx1 = max(0, y0 - pad), min(H, y0 + h + pad), max(0, x0 - pad), min(W, x0 + w + pad)
+    before = canvas[wy0:wy1, wx0:wx1].copy()
     region = canvas[y0:y0 + h, x0:x0 + w]
     if patch.mode == "residual":
         g = rng.uniform(*gain_range)
@@ -128,10 +206,22 @@ def paste_defect(rng, canvas: np.ndarray, target: np.ndarray, patch: DefectPatch
         src = rgb - rgb[~m].mean(0) + region[~m].mean(0) if (~m).any() else rgb
         region[:] = soft * src + (1 - soft) * region
     np.clip(region, 0, 255, out=region)
-    full = np.zeros((H, W), bool)
-    full[y0:y0 + h, x0:x0 + w] = m
-    target |= full
-    return full
+    src = np.zeros((H, W), bool)
+    src[y0:y0 + h, x0:x0 + w] = m
+    return _apply_realised(canvas, before, (wy0, wy1, wx0, wx1), src, target, ignore, rule)
+
+
+def _apply_realised(canvas, before, win, src, target, ignore, rule):
+    wy0, wy1, wx0, wx1 = win
+    pos_w, ign_w, _ = realised_label(before, canvas[wy0:wy1, wx0:wx1], src[wy0:wy1, wx0:wx1], rule)
+    pos = np.zeros_like(src)
+    ign = np.zeros_like(src)
+    pos[wy0:wy1, wx0:wx1] = pos_w
+    ign[wy0:wy1, wx0:wx1] = ign_w
+    target |= pos
+    if ignore is not None:
+        ignore |= ign & ~target
+    return pos
 
 
 def _bezier(rng, H, W, length):
@@ -144,8 +234,12 @@ def _bezier(rng, H, W, length):
     return ((1 - t) ** 2) * pts[0] + 2 * (1 - t) * t * pts[1] + (t ** 2) * pts[2]
 
 
-def procedural_defect(rng, canvas: np.ndarray, target: np.ndarray, contrasts: np.ndarray, kind: str = "auto"):
-    """Draw a synthetic thin scratch or small blob with a contrast sampled from the labeled defects."""
+def procedural_defect(rng, canvas: np.ndarray, target: np.ndarray, contrasts: np.ndarray, kind: str = "auto",
+                      ignore: Optional[np.ndarray] = None, rule: Optional[VisibilityRule] = None):
+    """Draw a synthetic thin scratch or small blob with a contrast sampled from the labeled defects.
+
+    Labelled from the realised change like :func:`paste_defect`; returns the realised positive mask.
+    """
     H, W = canvas.shape[:2]
     ss = 4  # supersampling for anti-aliasing
     layer = np.zeros((H * ss, W * ss), np.uint8)
@@ -161,11 +255,11 @@ def procedural_defect(rng, canvas: np.ndarray, target: np.ndarray, contrasts: np
     alpha = cv2.resize(layer, (W, H), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
     alpha = cv2.GaussianBlur(alpha, (0, 0), rng.uniform(0.3, 0.8))
     delta = float(rng.choice(contrasts)) * rng.uniform(0.6, 1.3)
+    before = canvas.copy()
     canvas += alpha[..., None] * delta
     np.clip(canvas, 0, 255, out=canvas)
     m = alpha > 0.35
-    target |= m
-    return m
+    return _apply_realised(canvas, before, (0, H, 0, W), m, target, ignore, rule or VisibilityRule())
 
 
 def photometric(rng, img: np.ndarray, strength: float = 1.0) -> np.ndarray:

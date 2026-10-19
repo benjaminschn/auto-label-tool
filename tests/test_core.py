@@ -195,3 +195,71 @@ def test_summarize_get_keys_with_dots():
     assert get(d, "review.risk/0.05.defect_recall") == 0.9
     assert get(d, "rounds.0.U.tol_f1") == 0.5
     assert get(d, "rounds.3.U") is None and get(d, "nope.x") is None
+
+
+# --------------------------------------------------------------------------- synthesis label contract
+
+def _bright_line_bank(delta=80.0):
+    img = np.full((80, 80, 3), 120, np.uint8)
+    img[40, 10:50] = 120 + delta      # exactly the masked pixels (clean inpainting)
+    return build_defect_bank([img], [_line_mask(80, 80, 40)])
+
+
+def test_realised_label_clipped_defect_is_not_positive():
+    """A bright residual pasted on a saturated background is invisible -> ignore, never positive."""
+    from autolabel.augment import realised_label
+    rng = np.random.RandomState(0)
+    bank = _bright_line_bank(80.0)
+    canvas = np.full((64, 64, 3), 255, np.float32)
+    tgt = np.zeros((64, 64), bool)
+    ign = np.zeros((64, 64), bool)
+    before = canvas.copy()
+    pos = paste_defect(rng, canvas, tgt, bank[0], gain_range=(1, 1), scale_range=(1, 1), ignore=ign)
+    assert np.abs(canvas - before).max() < 2.0       # (almost) nothing changed after clipping
+    assert not pos.any() and not tgt.any()
+    assert ign.sum() >= 30                           # the whole source line became ignore
+    # direct call: same result
+    m = np.zeros((20, 20), bool)
+    m[10, 3:17] = True
+    p2, i2, _ = realised_label(np.full((20, 20, 3), 255.0), np.full((20, 20, 3), 255.0), m)
+    assert not p2.any() and (i2 & m).sum() == m.sum()
+
+
+def test_realised_label_faint_and_partially_clipped():
+    rng = np.random.RandomState(1)
+    bank = build_defect_bank([np.repeat(np.where(_line_mask(80, 80, 40)[..., None], 60, 120), 3, -1).astype(np.uint8)],
+                             [_line_mask(80, 80, 40)])
+    noise = np.random.RandomState(2).normal(0, 1.0, (64, 64, 1)).astype(np.float32)
+    # (a) clearly visible dark scratch on mid-gray: positive ~ source mask
+    canvas = np.full((64, 64, 3), 150, np.float32) + noise
+    tgt, ign = np.zeros((64, 64), bool), np.zeros((64, 64), bool)
+    pos = paste_defect(rng, canvas, tgt, bank[0], gain_range=(1, 1), scale_range=(1, 1), ignore=ign)
+    assert pos.sum() >= 35 and not (ign & pos).any()
+    # (b) gain so small that the change is below the visibility threshold: no positive
+    canvas = np.full((64, 64, 3), 150, np.float32) + noise
+    tgt, ign = np.zeros((64, 64), bool), np.zeros((64, 64), bool)
+    pos = paste_defect(rng, canvas, tgt, bank[0], gain_range=(0.02, 0.02), scale_range=(1, 1), ignore=ign)
+    assert not pos.any() and ign.sum() >= 35
+    # (c) left half black (dark residual clipped away), right half gray: positive only on the right
+    canvas = np.full((64, 64, 3), 150, np.float32)
+    canvas[:, :32] = 0
+    tgt, ign = np.zeros((64, 64), bool), np.zeros((64, 64), bool)
+    pos = paste_defect(rng, canvas, tgt, bank[0], gain_range=(1, 1), scale_range=(1, 1), center=(32, 32),
+                       ignore=ign)
+    assert pos.any() and not pos[:, :32].any()
+    assert ign[:, :30].any()                          # the clipped part is ignore, not negative
+
+
+def test_synthetic_sample_weights_ignore_invisible_paste():
+    """End-to-end through the sample generator: invisible pasted defects get weight 0, label 0."""
+    from autolabel.train import SampleGenerator, TrainConfig, TrainData
+    img = np.full((80, 80, 3), 120, np.uint8)
+    img[40, 10:50] = 200
+    bg = np.full((96, 96, 3), 255, np.uint8)
+    cfg = TrainConfig(crop=64, p_synth=1.0, scale_range=(1.0, 1.0))
+    gen = SampleGenerator(TrainData(labeled=[(img, _line_mask(80, 80, 40))], backgrounds=[bg]), cfg,
+                          np.random.RandomState(0))
+    for _ in range(5):
+        _, tgt, w = gen._synthetic()
+        assert not tgt.any()
+        assert (w == 0).any()
